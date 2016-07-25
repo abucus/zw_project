@@ -2,18 +2,17 @@
 
 # from gurobipy import *
 # from RandomInput import *
-import networkx as nx
-import numpy as np
 import random
+
+import networkx as nx
 # import operator
 import csv
-import numpy as np
 import os
 
 #parameters
 
 #######################################################
-path='./Inputs/case1'
+path='C:/Users/mteng/Desktop/small case/'
 # path='C:\Users\liujm\Desktop\zhengwei proposal\\final_project\Inputs'
 #####load resource-project demand
 print(os.getcwd())
@@ -86,9 +85,11 @@ for row in project_activitis:
 project_activitis=csv.reader(open(path+'\\project_activity.csv','r'))
 for row in project_activitis:
     if len(row)>4:
-        for row1 in row[4]:
+        for row1 in row[4].split(' '):
             # print row[1],str(row[4]).split("'")[1]
-            project_activity[row[0]].add_edge(row[1],str(row[4]).split("'")[1])
+            print(row[4])
+            if len(row1)>2:
+                project_activity[row[0]].add_edge(row[1],row1[1:-1])
 
 project_activity_durations=csv.reader(open(path+'\\project_activity_duration.csv','r'))
 for row in project_activity_durations:
