@@ -3,3 +3,6 @@
 *.lp
 *.zip
 Inputs/
+*.sol
+*.txt
+*.xlsx
