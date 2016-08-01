@@ -1,25 +1,23 @@
 from sys import exit
 
 from gurobipy import Model, GRB, quicksum, LinExpr
-
 from input_data import load_data
-
 from os.path import exists, join
-
 from os import makedirs
-
 from random import choice
-
 from time import clock
+from multiprocessing.pool import Pool
 
 
-class HeuristicModel:
+class HeuristicParallelModel:
     def __init__(self, input_path, output_dir):
 
         if not exists(output_dir):
             makedirs(output_dir)
 
         self.output_dir = output_dir
+
+        self.pool = Pool()
 
         D = load_data(input_path)._asdict()
         for k in D:
@@ -43,11 +41,11 @@ class HeuristicModel:
         q = self.__eval_q(x)
         old_cost = self.__objective_function(x, q)
         T = 1.0
-        T_min = 0.00001
-        alpha = 0.75
+        T_min = 0.1
+        alpha = 0.7
         while T > T_min:
             i = 1
-            while i <= 100:
+            while i <= 20:
                 # stop until find a feasible solution
                 while True:
                     x_new = self.__neighbor(x)
@@ -62,6 +60,7 @@ class HeuristicModel:
                     old_cost = new_cost
                 i += 1
             T = T * alpha
+            print('Current temperature', T)
         return x, q, old_cost
 
     def __init_x(self):
@@ -122,10 +121,18 @@ class HeuristicModel:
         TD = {}
 
         #### Add Variable ####
-
+        CT_ASYNC = dict()
         for j in range(self.project_n):
             ## solve individual model get Project complete date
-            CT[j] = self.__optmize_single_project(x, j)
+            CT_ASYNC[j] = self.pool.apply_async(HeuristicParallelModel.optmize_single_project,
+                                                (x, j, self.project_list, self.project_activity,
+                                                 self.resource_supplier_list,
+                                                 self.resource_supplier_release_time, self.supplier_project_shipping,
+                                                 self.M,
+                                                 self.output_dir))
+
+        for j in range(self.project_n):
+            CT[j] = CT_ASYNC[j].get()
 
             ## Project Tadeness,construction completion time
             DT[j] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="(DT%d)" % j)
@@ -219,24 +226,23 @@ class HeuristicModel:
         self.resource_supplier_capacity[r, new_supplier] -= demand
         return x
 
-    def __optmize_single_project(self, x, j):
+    @staticmethod
+    def optmize_single_project(x, j, project_list, project_activity, resource_supplier_list,
+                               resource_supplier_release_time, supplier_project_shipping, M, output_dir):
         '''
         Given the generated x for single project, try to optimize the tardiness of the project.
-        :param x: the assignment of resource supplier to project
-        :param j: index of project
-        :return:
         '''
         m = Model("SingleProject_%d" % j)
 
         #### Create variables ####
-        project = self.project_list[j]
+        project = project_list[j]
 
         ## Project complete data,Project Tadeness,construction completion time
         CT = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="(CT%d)" % j)
 
         ## Activity start time
         ST = {}
-        project_activities = self.project_activity[project]
+        project_activities = project_activity[project]
         # print(project_activities.nodes())
         for row in project_activities.nodes():
             ST[row] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="(ST%d,%s)" % (j, row))
@@ -277,10 +283,10 @@ class HeuristicModel:
         for a in project_activities.nodes():
             for r in project_activities.node[a]['resources']:
                 resource_delivered_days = 0
-                for s in self.resource_supplier_list[r]:
+                for s in resource_supplier_list[r]:
                     resource_delivered_days += x.get((r, s, project), 0) * \
-                                               (self.resource_supplier_release_time[r, s] +
-                                                self.supplier_project_shipping[
+                                               (resource_supplier_release_time[r, s] +
+                                                supplier_project_shipping[
                                                     r, s, project])
                 m.addConstr(resource_delivered_days, GRB.LESS_EQUAL, ST[a],
                             name="constraint_8_project_%d_activity_%s_resource_%s" % (j, a, r))
@@ -298,11 +304,11 @@ class HeuristicModel:
                 if row1 != row2 and len(list(
                         set(project_activities.node[row1]['rk_resources']).intersection(
                             project_activities.node[row2]['rk_resources']))) > 0:
-                    m.addConstr(ST[row1] + project_activities.node[row1]['duration'] - self.M * (
+                    m.addConstr(ST[row1] + project_activities.node[row1]['duration'] - M * (
                         1 - y[row1, row2]), GRB.LESS_EQUAL, ST[row2],
                                 name="constraint_10_project_%d_activity_%s_activity_%s" % (j, row1, row2))
                     m.addConstr(
-                        ST[row2] + project_activities.node[row2]['duration'] - self.M * (y[row1, row2]),
+                        ST[row2] + project_activities.node[row2]['duration'] - M * (y[row1, row2]),
                         GRB.LESS_EQUAL, ST[row1],
                         name="constraint_11_project_%d_activity_%s_activity_%s" % (j, row1, row2))
                     # m.addConstr(y[j,row1,row2]+y[j,row2,row1],GRB.LESS_EQUAL,1)
@@ -341,8 +347,8 @@ class HeuristicModel:
         # Solve
         # m.params.presolve=0
         m.optimize()
-        m.write(join(self.output_dir, "heuristic_%d.lp" % j))
-        m.write(join(self.output_dir, "heuristic_%d.sol" % j))
+        m.write(join(output_dir, "heuristic_%d.lp" % j))
+        m.write(join(output_dir, "heuristic_%d.sol" % j))
         return m.objVal
 
     def __constraint_valid(self, x, q):
@@ -365,6 +371,7 @@ class HeuristicModel:
 
 if __name__ == '__main__':
     ## Generate x init
-    m = HeuristicModel('C:/Users/mteng/Desktop/small case/', 'C:/Users/mteng/Desktop/Heuristic')
+    #m = HeuristicParallelModel('C:/Users/mteng/Desktop/small case/', 'C:/Users/mteng/Desktop/Heuristic')
+    m = HeuristicParallelModel('./Inputs/P=10/', 'C:/Users/mteng/Desktop/Heuristic')
     (objVal, cost) = m.optimize()
     print('ObjVal', objVal, 'cost', cost)

@@ -200,3 +200,5 @@ def original_model(input_path, output_path):
 # print 'TD[project_id,TD]', [[row,TD[row].x] for row in TD]
 if __name__ == "__main__":
     original_model('C:/Users/mteng/Desktop/small case/', 'C:/Users/mteng/Desktop/MIP/')
+    (objVal, cost) = original_model('./Inputs/P=10/', 'C:/Users/mteng/Desktop/MIP/')
+    print('ObjVal', objVal, 'cost', cost)
