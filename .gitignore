@@ -6,3 +6,5 @@ Inputs/
 *.sol
 *.txt
 *.xlsx
+Output/
+.idea/
