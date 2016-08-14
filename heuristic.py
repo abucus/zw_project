@@ -12,6 +12,8 @@ from random import choice
 
 from time import clock
 
+from numpy import argmax
+
 
 class HeuristicModel:
     def __init__(self, input_path, output_dir):
@@ -41,7 +43,8 @@ class HeuristicModel:
         from random import random
         x = self.__init_x()
         q = self.__eval_q(x)
-        old_cost = self.__objective_function(x, q)
+        # j0 is the project has the max tardiness
+        old_cost, j0 = self.__objective_function(x, q)
         T = 1.0
         T_min = 0.00001
         alpha = 0.75
@@ -50,11 +53,11 @@ class HeuristicModel:
             while i <= 100:
                 # stop until find a feasible solution
                 while True:
-                    x_new = self.__neighbor(x)
+                    x_new = self.__neighbor(x, j0)
                     q_new = self.__eval_q(x_new)
                     if self.__constraint_valid(x_new, q_new): break
 
-                new_cost = self.__objective_function(x_new, q_new)
+                new_cost, j0 = self.__objective_function(x_new, q_new)
                 ap = self.__acceptance_probability(old_cost, new_cost, T)
                 if ap > random():
                     x = x_new
@@ -187,11 +190,13 @@ class HeuristicModel:
         m.optimize()
         m.write(join(self.output_dir, "heuristic_whole.lp"))
         m.write(join(self.output_dir, "heuristic_whole.sol"))
-        return m.objVal
+        print([self.w[j] * TD[j].X for j in range(self.project_n)])
+        return m.objVal, argmax([self.w[j] * TD[j].X for j in range(self.project_n)])
 
-    def __neighbor(self, x):
+    def __neighbor(self, x, j0):
         from random import choice
-        all_rsp = list(x.keys())
+        p0 = self.project_list[j0]
+        all_rsp = filter(list(x.keys()), lambda e: e[2] == p0)
         all_size = len(all_rsp)
         iterated = set()
         iter_num = 0

@@ -7,10 +7,12 @@ from os import makedirs
 from random import choice
 from time import clock
 from multiprocessing.pool import Pool
+from copy import deepcopy
+from numpy import argmax
 
 
 class HeuristicParallelModel:
-    def __init__(self, input_path, output_dir):
+    def __init__(self, input_path, output_dir, debug_mode=False):
 
         if not exists(output_dir):
             makedirs(output_dir)
@@ -19,9 +21,13 @@ class HeuristicParallelModel:
 
         self.pool = Pool()
 
+        self.obj_value_trace = []
+
         D = load_data(input_path)._asdict()
         for k in D:
             setattr(self, k, D[k])
+
+        self.debug_mode = debug_mode
 
     def optimize(self):
         start = clock()
@@ -39,20 +45,20 @@ class HeuristicParallelModel:
         from random import random
         x = self.__init_x()
         q = self.__eval_q(x)
-        old_cost = self.__objective_function(x, q)
+        old_cost, j0 = self.__objective_function(x, q)
         T = 1.0
-        T_min = 0.1
-        alpha = 0.7
+        T_min = 0.01
+        alpha = 0.8
         while T > T_min:
             i = 1
             while i <= 20:
                 # stop until find a feasible solution
                 while True:
-                    x_new = self.__neighbor(x)
+                    x_new, p_changed = self.__neighbor(x, j0)
                     q_new = self.__eval_q(x_new)
                     if self.__constraint_valid(x_new, q_new): break
 
-                new_cost = self.__objective_function(x_new, q_new)
+                new_cost, j0 = self.__objective_function(x_new, q_new, p_changed)
                 ap = self.__acceptance_probability(old_cost, new_cost, T)
                 if ap > random():
                     x = x_new
@@ -113,27 +119,36 @@ class HeuristicParallelModel:
             q[i, j, k] = 0 if x[i, j, k] == 0 else self.resource_project_demand[i, k]
         return q
 
-    def __objective_function(self, x, q):
+    def __objective_function(self, x, q, p_changed=None):
         m = Model("Overall_Model")
 
-        CT = {}
-        DT = {}
-        TD = {}
-
-        #### Add Variable ####
-        CT_ASYNC = dict()
-        for j in range(self.project_n):
-            ## solve individual model get Project complete date
-            CT_ASYNC[j] = self.pool.apply_async(HeuristicParallelModel.optmize_single_project,
-                                                (x, j, self.project_list, self.project_activity,
+        if p_changed is not None:
+            j0 = self.project_list.index(p_changed)
+            CT = self.last_CT
+            CT[j0] = self.optmize_single_project(x, j0, self.project_list, self.project_activity,
                                                  self.resource_supplier_list,
                                                  self.resource_supplier_release_time, self.supplier_project_shipping,
                                                  self.M,
-                                                 self.output_dir))
+                                                 self.output_dir)
+        else:
+            CT = {}
+            CT_ASYNC = dict()
+            for j in range(self.project_n):
+                ## solve individual model get Project complete date
+                CT_ASYNC[j] = self.pool.apply_async(HeuristicParallelModel.optmize_single_project,
+                                                    (x, j, self.project_list, self.project_activity,
+                                                     self.resource_supplier_list,
+                                                     self.resource_supplier_release_time,
+                                                     self.supplier_project_shipping,
+                                                     self.M,
+                                                     self.output_dir))
+            for j in range(self.project_n):
+                CT[j] = CT_ASYNC[j].get()
 
+        self.last_CT = deepcopy(CT)
+        DT = {}
+        TD = {}
         for j in range(self.project_n):
-            CT[j] = CT_ASYNC[j].get()
-
             ## Project Tadeness,construction completion time
             DT[j] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="(DT%d)" % j)
             TD[j] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="(TD%d)" % j)
@@ -194,11 +209,14 @@ class HeuristicParallelModel:
         m.optimize()
         m.write(join(self.output_dir, "heuristic_whole.lp"))
         m.write(join(self.output_dir, "heuristic_whole.sol"))
-        return m.objVal
 
-    def __neighbor(self, x):
+        self.obj_value_trace.append(m.objVal)
+        return m.objVal, argmax([self.w[j] * TD[j].X for j in range(self.project_n)])
+
+    def __neighbor(self, x, j0):
         from random import choice
-        all_rsp = list(x.keys())
+        p0 = self.project_list[j0]
+        all_rsp = list(filter(lambda rsp: rsp[2] == p0 ,list(x.keys())))
         all_size = len(all_rsp)
         iterated = set()
         iter_num = 0
@@ -215,7 +233,7 @@ class HeuristicParallelModel:
             if supplier_candidates: break
             iter_num += 1;
         else:
-            return x
+            return x, None
         # change for previous supplier
         x.pop((r, s, p))
         self.resource_supplier_capacity[r, s] += demand
@@ -224,7 +242,7 @@ class HeuristicParallelModel:
         new_supplier = choice(supplier_candidates)[1]
         x[r, new_supplier, p] = 1
         self.resource_supplier_capacity[r, new_supplier] -= demand
-        return x
+        return x, p
 
     @staticmethod
     def optmize_single_project(x, j, project_list, project_activity, resource_supplier_list,
@@ -371,7 +389,15 @@ class HeuristicParallelModel:
 
 if __name__ == '__main__':
     ## Generate x init
-    #m = HeuristicParallelModel('C:/Users/mteng/Desktop/small case/', 'C:/Users/mteng/Desktop/Heuristic')
+    # m = HeuristicParallelModel('C:/Users/mteng/Desktop/small case/', 'C:/Users/mteng/Desktop/Heuristic')
+    import matplotlib.pyplot as plt
+
     m = HeuristicParallelModel('./Inputs/P=10/', 'C:/Users/mteng/Desktop/Heuristic')
     (objVal, cost) = m.optimize()
+
+    plt.plot(range(len(m.obj_value_trace)), m.obj_value_trace)
+    max_y = max(m.obj_value_trace)
+    min_y = min(m.obj_value_trace)
+    plt.ylim(min_y - 0.1 * (max_y - min_y), max_y + 0.1 * (max_y - min_y))
+    plt.show()
     print('ObjVal', objVal, 'cost', cost)

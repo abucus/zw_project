@@ -6,10 +6,10 @@ from os.path import join
 from os.path import exists
 import time
 
+
 # Create optimization model
 
 def original_model(input_path, output_path):
-
     if not exists(output_path):
         makedirs(output_path)
 
@@ -27,34 +27,34 @@ def original_model(input_path, output_path):
     q = {}
     for (i, j, k) in supplier_project_shipping:
         # i resource, j supplier, k project
-        x[i, j, k] = m.addVar(obj=0, vtype=GRB.BINARY, name="(x%s,%s,%s)" % (i, j, k))
-        q[i, j, k] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="(q%s,%s,%s)" % (i, j, k))
+        x[i, j, k] = m.addVar(obj=0, vtype=GRB.BINARY, name="x_%s_%s_%s" % (i, j, k))
+        q[i, j, k] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="q_%s_%s_%s)" % (i, j, k))
     #####Project complete data,Project Tadeness,construction completion time
     DT = {}
     TD = {}
     CT = {}
-    DT[-1] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="(DT-1)")  # project start time
+    DT[-1] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="DT_-1")  # project start time
     for j in range(project_n):
-        DT[j] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="(DT%d)" % j)  # project j complete time
-        TD[j] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="(TD%d)" % j)  # project j complete time
-        CT[j] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="(CT%d)" % j)  # project j complete time
+        DT[j] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="DT_%d" % j)  # project j complete time
+        TD[j] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="TD_%d" % j)  # project j complete time
+        CT[j] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="CT_%d" % j)  # project j complete time
 
     #####Activity start time
     ST = []
     for j in range(project_n):
         ST.append({})
         for row in project_activity[project_list[j]].nodes():
-            ST[j][row] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="(ST%d,%s)" % (j, row))
+            ST[j][row] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="ST_%d_%s" % (j, row))
 
     #####Review sequence
     z = {}
     for i in range(project_n):
         for j in range(project_n):
             if i != j:
-                z[i, j] = m.addVar(obj=0, vtype=GRB.BINARY, name="(z%d,%d)" % (i, j))
+                z[i, j] = m.addVar(obj=0, vtype=GRB.BINARY, name="z_%d_%d" % (i, j))
 
     for j in range(project_n):
-        z[-1, j] = m.addVar(obj=0, vtype=GRB.BINARY, name="(z%d,%d)" % (-1, j))
+        z[-1, j] = m.addVar(obj=0, vtype=GRB.BINARY, name="z_%d_%d" % (-1, j))
 
     #####
     y = {}
@@ -62,9 +62,10 @@ def original_model(input_path, output_path):
         for row1 in project_activity[project_list[j]].nodes():
             for row2 in project_activity[project_list[j]].nodes():
                 # print project_activity[project_list[j]].node[row1]
-                if row1 != row2 and len(list(set(project_activity[project_list[j]].node[row1]['rk_resources']).intersection(
-                        project_activity[project_list[j]].node[row2]['rk_resources']))) > 0:
-                    y[j, row1, row2] = m.addVar(obj=0, vtype=GRB.BINARY, name="(y%d,%s,%s)" % (j, row1, row2))
+                if row1 != row2 and len(
+                        list(set(project_activity[project_list[j]].node[row1]['rk_resources']).intersection(
+                            project_activity[project_list[j]].node[row2]['rk_resources']))) > 0:
+                    y[j, row1, row2] = m.addVar(obj=0, vtype=GRB.BINARY, name="y_%d_%s_%s" % (j, row1, row2))
     m.update()
     # create constrains#########################################
     #####Constrain 2: project complete data>due data
@@ -100,24 +101,28 @@ def original_model(input_path, output_path):
         for row in project_activity[project_list[j]].nodes():
             for row1 in project_activity[project_list[j]].node[row]['resources']:
                 m.addConstr(quicksum(x[row1, i, project_list[j]] * (
-                    resource_supplier_release_time[row1, i] + supplier_project_shipping[row1, i, project_list[j]]) for i in
+                    resource_supplier_release_time[row1, i] + supplier_project_shipping[row1, i, project_list[j]]) for i
+                                     in
                                      resource_supplier_list[row1]), GRB.LESS_EQUAL, ST[j][row],
                             name="constraint_8_project_%d_activity_%s_resource_%s" % (j, row, row1))
 
     #####constrain 9 activity sequence constrain
     for j in range(project_n):
         for row1, row2 in project_activity[project_list[j]].edges():
-            m.addConstr(ST[j][row1] + project_activity[project_list[j]].node[row1]['duration'], GRB.LESS_EQUAL, ST[j][row2],
+            m.addConstr(ST[j][row1] + project_activity[project_list[j]].node[row1]['duration'], GRB.LESS_EQUAL,
+                        ST[j][row2],
                         name="constraint_9_project_%d_activity_%s_activity_%s" % (j, row1, row2))
 
     #####constrain 10,11
     for j in range(project_n):
         for row1 in project_activity[project_list[j]].nodes():
             for row2 in project_activity[project_list[j]].nodes():
-                if row1 != row2 and len(list(set(project_activity[project_list[j]].node[row1]['rk_resources']).intersection(
-                        project_activity[project_list[j]].node[row2]['rk_resources']))) > 0:
+                if row1 != row2 and len(
+                        list(set(project_activity[project_list[j]].node[row1]['rk_resources']).intersection(
+                            project_activity[project_list[j]].node[row2]['rk_resources']))) > 0:
                     m.addConstr(
-                        ST[j][row1] + project_activity[project_list[j]].node[row1]['duration'] - M * (1 - y[j, row1, row2]),
+                        ST[j][row1] + project_activity[project_list[j]].node[row1]['duration'] - M * (
+                            1 - y[j, row1, row2]),
                         GRB.LESS_EQUAL, ST[j][row2],
                         name="constraint_10_project_%d_activity_%s_activity_%s" % (j, row1, row2))
                     m.addConstr(
@@ -184,7 +189,9 @@ def original_model(input_path, output_path):
     m.write(join(output_path, 'original.lp'))
     m.write(join(output_path, 'original.sol'))
 
-    return m.objVal, time_cost
+    return m.objVal, time_cost, m
+
+
 # print decision variables
 # print 'review sequence', [row for row in z if z[row].x>=0.98]
 # print 'supplier-project-order', [row for row in x if x[row].x>=0.98]
@@ -199,6 +206,19 @@ def original_model(input_path, output_path):
 # print 'DD[project_id,DD]', [[row,DD[row]] for row in range(project_n)]
 # print 'TD[project_id,TD]', [[row,TD[row].x] for row in TD]
 if __name__ == "__main__":
-    original_model('C:/Users/mteng/Desktop/small case/', 'C:/Users/mteng/Desktop/MIP/')
-    (objVal, cost) = original_model('./Inputs/P=10/', 'C:/Users/mteng/Desktop/MIP/')
-    print('ObjVal', objVal, 'cost', cost)
+    from sys import exit
+
+    # 'C:/Users/mteng/Desktop/small case'
+    data_path = './Inputs/case1/';
+    D = load_data(data_path)
+    # exit(0)
+    (objVal, cost, m) = original_model(data_path, 'C:/Users/mteng/Desktop/MIP/')
+
+    print('ObjVal', objVal, 'cost', cost, m.Status == GRB.OPTIMAL)
+    # D = load_data('./Inputs/case1')
+
+    from resulat_analysis import project_resource_suppliery_analyze
+
+    project_resource_suppliery_analyze(m, D.project_list, D.w, D.resource_project_demand, D.review_duration,
+                                       D.resource_supplier_list, D.resource_supplier_capacity,
+                                       D.resource_supplier_release_time, D.c, D.DD)
