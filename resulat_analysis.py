@@ -41,12 +41,6 @@ def supplier_assignment_analyze(resource_project_demand, resource_supplier_capac
             d_idx += 1
         d.to_csv(output_path + 'resource_%s_assignment.csv' % resource, index=False)
 
-
-def release_shipping_review_time_analysis(resource_supplier_release_time, TD, x):
-    print(resource_supplier_release_time)
-    pass
-
-
 def project_resource_suppliery_analyze(model, project_list, w, resource_project_demand, review_duration,
                                        resource_supplier_list, resource_supplier_capacity,
                                        resource_supplier_release_time, c, DD):
@@ -85,11 +79,26 @@ def project_resource_suppliery_analyze(model, project_list, w, resource_project_
     d.to_csv('project_resource_suppliery_analyze.csv', index=False)
 
 
+def _column_map(resource_supplier_list):
+    resources = sorted(resource_supplier_list.keys())
+    columns = ['Project', 'w_j_TD_j', 'R_j', 'DD_j'] + ['Demand_%s' % r for r in resources] + [
+        '%s_%s_%s' % (r, s, label)
+        for label in ['capacity', 'cost', 'release_time', 'choose_or_not'] for r in resources for s in
+        resource_supplier_list[r]]
+
+    alphabetics = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    letters = [l for l in alphabetics] + [i + j for i in alphabetics for j in alphabetics]
+
+    for i, c in enumerate(columns):
+        print(letters[i], ":", c)
+
+
 if __name__ == '__main__':
     from input_data import load_data
 
     D = load_data('Inputs/case1/')
     print(D.resource_supplier_list)
-    project_resource_suppliery_analyze(None, D.project_list, D.w, D.resource_project_demand, D.review_duration,
-                                       D.resource_supplier_list, D.resource_supplier_capacity,
-                                       D.resource_supplier_release_time, D.c)
+    # project_resource_suppliery_analyze(None, D.project_list, D.w, D.resource_project_demand, D.review_duration,
+    #                                    D.resource_supplier_list, D.resource_supplier_capacity,
+    #                                    D.resource_supplier_release_time, D.c)
+    _column_map(D.resource_supplier_list)
