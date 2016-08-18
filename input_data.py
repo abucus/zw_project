@@ -18,7 +18,7 @@ def load_data(path='C:/Users/mteng/Desktop/small case/'):
     project_list = first_row[1:]
     resource_project_demand = {}
     for row in resource_project_file:
-        print('row[0]',row)
+        #print('row[0]',row)
         if row[0] not in resource_list:
             resource_list.append(row[0])
             for i in range(1, len(row)):

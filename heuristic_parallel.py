@@ -8,7 +8,7 @@ from random import choice
 from time import clock
 from multiprocessing.pool import Pool
 from copy import deepcopy
-from numpy import argmax
+from numpy import argmax, argmin
 
 
 class HeuristicParallelModel:
@@ -59,6 +59,10 @@ class HeuristicParallelModel:
                     if self.__constraint_valid(x_new, q_new): break
 
                 new_cost, j0 = self.__objective_function(x_new, q_new, p_changed)
+
+                if hasattr(self, j0) and self.j0 == j0:
+                    return x, q, old_cost
+
                 ap = self.__acceptance_probability(old_cost, new_cost, T)
                 if ap > random():
                     x = x_new
@@ -214,34 +218,26 @@ class HeuristicParallelModel:
         return m.objVal, argmax([self.w[j] * TD[j].X for j in range(self.project_n)])
 
     def __neighbor(self, x, j0):
-        from random import choice
         p0 = self.project_list[j0]
-        all_rsp = list(filter(lambda rsp: rsp[2] == p0 ,list(x.keys())))
-        all_size = len(all_rsp)
-        iterated = set()
-        iter_num = 0
-        while len(iterated) < all_size:
-            (r, s, p) = choice(all_rsp)
-            iterated.add((r, s, p))
-            # print('mute:', r, s, p)
+        all_rsp = list(filter(lambda rsp: rsp[2] == p0, list(x.keys())))
+        for r, s, p in all_rsp:
             demand = self.resource_project_demand[r, p]
+            # get all candidate suppliers with (release+ship time) and enough demand
+            supplier_candidates = [
+                (s_, self.resource_supplier_release_time[r, s_] + self.supplier_project_shipping[r, s_, p]) for (r_, s_)
+                in self.resource_supplier_capacity if
+                r_ == r and s_ != s and self.resource_supplier_capacity[r_, s] >= demand]
+            supplier_candidates = list(filter(
+                lambda x: x[1] < self.resource_supplier_release_time[r, s] + self.supplier_project_shipping[r, s, p],
+                supplier_candidates))
 
-            supplier_candidates = [(r, s_, p, self.resource_supplier_capacity[r_, s_]) \
-                                   for (r_, s_) in self.resource_supplier_capacity \
-                                   if r_ == r and s_ != s
-                                   and self.resource_supplier_capacity[r_, s] >= demand]
-            if supplier_candidates: break
-            iter_num += 1;
-        else:
-            return x, None
-        # change for previous supplier
-        x.pop((r, s, p))
-        self.resource_supplier_capacity[r, s] += demand
+            if supplier_candidates:
+                x.pop((r, s, p))
+                self.resource_supplier_capacity[r, s] += demand
 
-        # change for new supplier
-        new_supplier = choice(supplier_candidates)[1]
-        x[r, new_supplier, p] = 1
-        self.resource_supplier_capacity[r, new_supplier] -= demand
+                new_supplier = supplier_candidates[argmin([e[1] for e in supplier_candidates])][0]
+                x[r, new_supplier, p] = 1
+                self.resource_supplier_capacity[r, new_supplier] -= demand
         return x, p
 
     @staticmethod
@@ -392,7 +388,7 @@ if __name__ == '__main__':
     # m = HeuristicParallelModel('C:/Users/mteng/Desktop/small case/', 'C:/Users/mteng/Desktop/Heuristic')
     import matplotlib.pyplot as plt
 
-    m = HeuristicParallelModel('./Inputs/P=10/', 'C:/Users/mteng/Desktop/Heuristic')
+    m = HeuristicParallelModel('./Inputs/P=20/', 'C:/Users/mteng/Desktop/Heuristic')
     (objVal, cost) = m.optimize()
 
     plt.plot(range(len(m.obj_value_trace)), m.obj_value_trace)

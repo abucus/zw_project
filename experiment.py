@@ -12,17 +12,10 @@ def chart(path, out_dir):
     plt.style.use('ggplot')
     size = (8, 8)
 
-    original_cost = d[d['Method'] == 'Original']['Time Cost (seconds)']
-
-    heuristic_cost = d[d['Method'] == 'Heuristic']['Time Cost (seconds)']
-
-    original_objvalue = d[d['Method'] == 'Original']['Obj Value']
-
-    heuristic_objvalue = d[d['Method'] == 'Heuristic']['Obj Value']
-
     figure = plt.figure(figsize=size)
-    original_cost_line, = plt.plot(d['Project Num'].unique(), original_cost.tolist(), 'ro-', label='Original Time Cost')
-    heuristic_cost_line, = plt.plot(d['Project Num'].unique(), heuristic_cost.tolist(), 'bo-',
+    original_cost_line, = plt.plot(d['Project Num'].unique(), d['Original Time Cost (seconds)'], 'ro-',
+                                   label='Original Time Cost')
+    heuristic_cost_line, = plt.plot(d['Project Num'].unique(), d['Heuristic Time Cost (seconds)'], 'bo-',
                                     label='Heuristic Time Cost')
     plt.xlabel('Project Size')
     plt.ylabel('Time Cost (seconds)')
@@ -30,9 +23,9 @@ def chart(path, out_dir):
     figure.savefig(join(out_dir, 'Time_Cost_Comparison.png'))
 
     figure = plt.figure(figsize=size)
-    original_obj_line, = plt.plot(d['Project Num'].unique(), original_objvalue.tolist(), 'ro-',
+    original_obj_line, = plt.plot(d['Project Num'].unique(), d['Original Obj Value'], 'ro-',
                                   label='Original Objective Value')
-    heuristic_obj_line, = plt.plot(d['Project Num'].unique(), heuristic_objvalue.tolist(), 'bo-',
+    heuristic_obj_line, = plt.plot(d['Project Num'].unique(), d['Heuristic Obj Value'], 'bo-',
                                    label='Heuristic Objective Value')
     plt.xlabel('Project Size')
     plt.ylabel('Objective Value')
@@ -43,20 +36,21 @@ def chart(path, out_dir):
 if __name__ == "__main__":
     baes_input_path = './Inputs/P=%d/'
     base_output_path = './Output/P=%d/'
-    result = pd.DataFrame(columns=['Project Num', 'Method', 'Time Cost (seconds)', 'Obj Value'])
+    result = pd.DataFrame(
+        columns=['Project Num', 'Original Time Cost (seconds)', 'Original Obj Value', 'Heuristic Time Cost (seconds)',
+                 'Heuristic Obj Value'])
     result_idx = 0
 
-    for i in [10, 15, 20, 25, 30, 35, 40, 45]:
+    for i in [10, 15, 20, 25, 30, 35, 40, 45][:2]:
         input_path = baes_input_path % i
         output_path = base_output_path % i
 
-        (objValue, time_cost) = original_model(input_path, output_path)
-        result.loc[result_idx] = [i, 'Original', time_cost, objValue]
-        result_idx += 1
+        (original_objValue, original_time_cost, m) = original_model(input_path, output_path)
 
         heuristic_model = HeuristicParallelModel(input_path, output_path)
-        (objValue, time_cost) = heuristic_model.optimize()
-        result.loc[result_idx] = [i, 'Heuristic', time_cost, objValue]
+        (heuristic_objValue, heuristic_time_cost) = heuristic_model.optimize()
+
+        result.loc[result_idx] = [i, original_time_cost, original_objValue, heuristic_time_cost, heuristic_objValue]
         result_idx += 1
 
         result.to_csv('./Output/experiment_result.csv', index=False)
