@@ -2,6 +2,7 @@ import pandas as pd
 from os.path import join
 
 from heuristic_parallel import HeuristicParallelModel
+from heuristic_ga import heuristic_ga_optimize
 from model import original_model
 import matplotlib.pyplot as plt
 
@@ -34,23 +35,27 @@ def chart(path, out_dir):
 
 
 if __name__ == "__main__":
-    baes_input_path = './Inputs/P=%d/'
+    # base_input_path = './Inputs/P=%d/'
+    base_input_path = './Inputs/by_project_small_resource/P=%d/'
     base_output_path = './Output/P=%d/'
     result = pd.DataFrame(
         columns=['Project Num', 'Original Time Cost (seconds)', 'Original Obj Value', 'Heuristic Time Cost (seconds)',
                  'Heuristic Obj Value'])
     result_idx = 0
 
-    for i in [10, 15, 20, 25, 30, 35, 40, 45][:2]:
-        input_path = baes_input_path % i
+    for i in [10, 15, 20, 25, 30, 35, 40, 45]:
+        input_path = base_input_path % i
         output_path = base_output_path % i
 
         (original_objValue, original_time_cost, m) = original_model(input_path, output_path)
 
-        heuristic_model = HeuristicParallelModel(input_path, output_path)
-        (heuristic_objValue, heuristic_time_cost) = heuristic_model.optimize()
+        # heuristic_model = HeuristicParallelModel(input_path, output_path)
+        # (heuristic_objValue, heuristic_time_cost) = heuristic_model.optimize()
 
-        result.loc[result_idx] = [i, original_time_cost, original_objValue, heuristic_time_cost, heuristic_objValue]
+        (ga_objValue, ga_time_cost) = heuristic_ga_optimize(input_path, None)
+
+        # result.loc[result_idx] = [i, original_time_cost, original_objValue, heuristic_time_cost, heuristic_objValue]
+        result.loc[result_idx] = [i, original_time_cost, original_objValue, ga_time_cost, ga_objValue]
         result_idx += 1
 
         result.to_csv('./Output/experiment_result.csv', index=False)

@@ -1,5 +1,6 @@
+import logging
 import random
-from copy import deepcopy
+import time
 from multiprocessing.pool import Pool
 
 import numpy as np
@@ -11,9 +12,37 @@ from gurobipy import Model, GRB, quicksum, LinExpr
 
 from input_data import load_data
 
+logging.basicConfig(filename='example.log', level=logging.DEBUG)
+
 _tardiness_obj_trace = []
 _last_x = None
 _last_CT = None
+_pool = None
+_delta_trace = []
+_CT_map = {}
+
+
+def _CT_map_key(project, suppliers):
+    sorted_suppliers = sorted(suppliers)
+    return '%s_' * (1 + len(sorted_suppliers)) % tuple([project] + sorted_suppliers)
+
+
+def _get_CT(project, suppliers):
+    return _CT_map.get(_CT_map_key(project, suppliers))
+
+
+def _put_CT(project, suppliers, val):
+    _CT_map[_CT_map_key(project, suppliers)] = val
+
+
+def _get_project_suppliers_map(x, project_list):
+    rlt = {p: [] for p in project_list}
+    for (r, s, p), v in x.items():
+        if v != 0:
+            rlt[p].append(s)
+        else:
+            raise Exception("wrong!")
+    return rlt
 
 
 def _normalize(arr):
@@ -29,15 +58,21 @@ def _random_delta_weight_for_projects(project_n, Type):
 
 
 def _mate(ind1, ind2):
-    rlt = tools.cxTwoPoint(ind1, ind2)
-    return (_normalize(e) for e in rlt)
+    global _delta_trace
+    raw = tools.cxTwoPoint(ind1, ind2)
+    rlt = [_normalize(e) for e in raw]
+    _delta_trace.append(['mate'] + rlt[0])
+    _delta_trace.append(['mate'] + rlt[1])
+    return rlt
 
 
 def _mutate(ind, mutate_prob):
     for i in range(len(ind)):
         if random.random() < mutate_prob:
             ind[i] = random.random()
-    return _normalize(ind),
+    rlt = _normalize(ind)
+    _delta_trace.append(['mutate'] + rlt)
+    return rlt,
 
 
 def _objective_function_for_delta_weight(D, delta_weight):
@@ -110,13 +145,13 @@ def _objective_function_for_delta_weight(D, delta_weight):
     # m.params.presolve=0
     m.optimize()
 
-    X = {}
+    X_ = {}
     for (i, j, k) in D.supplier_project_shipping:
         v = m.getVarByName("x_%s_%s_%s" % (i, j, k))
         if v.X == 1:
-            X[i, j, k] = 1
+            X_[i, j, k] = 1
 
-    return -_objective_function_for_tardiness(X, D),
+    return -_objective_function_for_tardiness(X_, D),
 
 
 def optmize_single_project(x, j, project_list, project_activity, resource_supplier_list, resource_supplier_release_time,
@@ -237,40 +272,55 @@ def optmize_single_project(x, j, project_list, project_activity, resource_suppli
     m.optimize()
     # m.write(join(output_dir, "heuristic_%d.lp" % j))
     # m.write(join(output_dir, "heuristic_%d.sol" % j))
+    logging.info("project %d with optimalVal %r" % (j, m.objVal))
     return m.objVal
 
 
-def get_project_to_recompute(x, project_n, project_list):
+def _get_project_to_recompute(x, project_n, project_list):
     if _last_x is None:
         return range(project_n), []
-    diffs_proj = set(p for r, s, p in x.keys() ^ _last_x.keys())
+    # logging.info('x keys:%r' % x.keys())
+    # logging.info('last x keys:%r' % _last_x.keys())
+    diffs_proj = set(p for r, s, p in (x.keys() ^ _last_x.keys()))
+    logging.info('diffs_proj:%r' % diffs_proj)
     diffs_proj_idx = sorted([project_list.index(p) for p in diffs_proj])
     same_proj_idx = [i for i in range(project_n) if project_list[i] not in diffs_proj]
+    logging.info("project    recompute idx:%r" % diffs_proj_idx)
+    logging.info("project no-recompute idx:%r" % same_proj_idx)
     return diffs_proj_idx, same_proj_idx
 
 
 def _objective_function_for_tardiness(x, D):
-    global _last_CT
+    global _last_CT, _last_x, _pool
     m = Model("Overall_Model")
 
     CT = {}
     CT_ASYNC = dict()
-    pool = Pool()
-    project_to_recompute, project_no_recompute = get_project_to_recompute(x, D.project_n, D.project_list)
-    for j in project_to_recompute:
-        ## solve individual model get Project complete date
-        CT_ASYNC[j] = pool.apply_async(optmize_single_project,
-                                       (x, j, D.project_list, D.project_activity, D.resource_supplier_list,
-                                        D.resource_supplier_release_time,
-                                        D.supplier_project_shipping, D.M))
-    for j in project_to_recompute:
+    # project_to_recompute, project_no_recompute = get_project_to_recompute(x, D.project_n, D.project_list)
+    project_suppliers = _get_project_suppliers_map(x, D.project_list)
+    for j in range(D.project_n):
+        p = D.project_list[j]
+        history_CT = _get_CT(p, project_suppliers[p])
+        if history_CT is None:
+            CT_ASYNC[j] = _pool.apply_async(optmize_single_project,
+                                            (x, j, D.project_list, D.project_activity, D.resource_supplier_list,
+                                             D.resource_supplier_release_time,
+                                             D.supplier_project_shipping, D.M))
+        else:
+            # logging.info('%s [%s]' % (p, ','.join(sorted(project_suppliers[p]))))
+            CT[j] = history_CT
+            logging.info('project %s get historical value %f.' % (p, history_CT))
+
+    for j in CT_ASYNC:
         CT[j] = CT_ASYNC[j].get()
+        p = D.project_list[j]
+        _put_CT(p, project_suppliers[p], CT[j])
 
-    for j in project_no_recompute:
-        CT[j] = _last_CT[j]
+    # _last_CT = deepcopy(CT)
+    # _last_x = deepcopy(x)
 
-    _last_CT = deepcopy(CT)
-    _last_x = deepcopy(x)
+    # if len(project_no_recompute) == D.project_n:
+    #     return _tardiness_obj_trace[-1]
 
     # self.last_CT = deepcopy(CT)
     DT = {}
@@ -339,15 +389,19 @@ def _objective_function_for_tardiness(x, D):
 
     # self.obj_value_trace.append(m.objVal)
     _tardiness_obj_trace.append(m.objVal)
+    logging.info("Tardiness value:%r" % m.objVal)
     return m.objVal
 
 
 def heuristic_ga_optimize(input_path, out_path):
-    global _last_CT
-    global _last_x
+    start = time.clock()
+    global _last_x, _last_CT, _pool, _delta_trace
     _tardiness_obj_trace.clear()
+    _delta_trace.clear()
+    _CT_map.clear()
     _last_x = None
     _last_CT = None
+    _pool = Pool(5)
 
     D = load_data(input_path)
 
@@ -363,14 +417,24 @@ def heuristic_ga_optimize(input_path, out_path):
     toolbox.register("select", tools.selTournament, tournsize=3)
     # print()
 
-    pop = toolbox.population(n=20)
+    pop = toolbox.population(n=10)
     hof = tools.HallOfFame(1)
 
     # print(toolbox.individual())
     # print(pop)
-    pop, log = algorithms.eaSimple(pop, toolbox, cxpb=0.5, mutpb=0.2, ngen=40, halloffame=hof, verbose=True)
-    print(min(_tardiness_obj_trace), '\n', max(_tardiness_obj_trace))
+    pop, log = algorithms.eaSimple(pop, toolbox, cxpb=0.5, mutpb=0.2, ngen=1, halloffame=hof, verbose=True)
+    # print(min(_tardiness_obj_trace), '\n', max(_tardiness_obj_trace))
+    # print(_tardiness_obj_trace)
+    # logging.info('min tardiness obj trace %r \n max tardiness obj trace:%r\n' % (
+    #     min(_tardiness_obj_trace), max(_tardiness_obj_trace)))
+    # logging.info(_tardiness_obj_trace)
+    return min(_tardiness_obj_trace), time.clock() - start
 
 
 if __name__ == '__main__':
-    heuristic_ga_optimize('./Inputs/P=10/', None)
+    # C:/Users/mteng/Desktop/small case/
+    # ./Inputs/P=10
+    # ./Inputs/case1
+    print(heuristic_ga_optimize('./Inputs/P=10', None))
+    # d = pd.DataFrame(_delta_trace)
+    # d.to_csv('delta_trace.csv')
