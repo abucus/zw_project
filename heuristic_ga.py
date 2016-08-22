@@ -20,6 +20,8 @@ _last_CT = None
 _pool = None
 _delta_trace = []
 _CT_map = {}
+_delta_dim = 0
+_delta_project_idx = {}
 
 
 def _CT_map_key(project, suppliers):
@@ -52,8 +54,10 @@ def _normalize(arr):
     return arr
 
 
-def _random_delta_weight_for_projects(project_n, Type):
-    rlt = Type(np.random.random_sample(project_n).tolist())
+def _random_delta_weight_for_projects(num, Type):
+    rlt = Type([1]*num)
+    #rlt = Type(np.random.random_sample(num).tolist())
+    #rlt = [1]*num
     return _normalize(rlt)
 
 
@@ -85,8 +89,10 @@ def _objective_function_for_delta_weight(D, delta_weight):
         q[r, s, p] = m.addVar(vtype=GRB.CONTINUOUS, name="q_%s_%s_%s" % (r, s, p))
 
     AT = {}
+
     for j in range(D.project_n):
-        AT[j] = m.addVar(vtype=GRB.CONTINUOUS, name="AT_%s" % j)
+        for k in sorted([r for r, p in D.resource_project_demand if p == D.project_list[j]]):
+            AT[j, k] = m.addVar(vtype=GRB.CONTINUOUS, name="AT_%s_%s" % (j, k))
 
     m.update()
 
@@ -119,23 +125,27 @@ def _objective_function_for_delta_weight(D, delta_weight):
     # constraint 8
     for j in range(D.project_n):
         p = D.project_list[j]
-        project_resources = [r for (r, p_) in D.resource_project_demand.keys() if p_ == p]
-        project_supplier_resource = [(r, s) for r in project_resources for s in D.resource_supplier_list[r]]
-        print(list(D.supplier_project_shipping.keys())[:10])
-        # print(D.supplier_project_shipping['NK0g77', 'S1671', 'P1'])
-        print(list(x.keys())[:10])
-        # print(x['NK0g77', 'S1671', 'P1'])
-        m.addConstr(
-            quicksum(
-                x[r, s, p] * (D.resource_supplier_release_time[r, s] + D.supplier_project_shipping[r, s, p]) for r, s in
-                project_supplier_resource), GRB.LESS_EQUAL, AT[j],
-            name="constraint_8_project_%d_all_resource_deliver" % j)
+        project_resources = sorted([r for (r, p_) in D.resource_project_demand.keys() if p_ == p])
+        for r in project_resources:
+            suppliers = D.resource_supplier_list[r]
+
+            #print(list(D.supplier_project_shipping.keys())[:10])
+            # print(D.supplier_project_shipping['NK0g77', 'S1671', 'P1'])
+            #print(list(x.keys())[:10])
+            # print(x['NK0g77', 'S1671', 'P1'])
+            m.addConstr(
+                quicksum(
+                    x[r, s, p] * (D.resource_supplier_release_time[r, s] + D.supplier_project_shipping[r, s, p]) for
+                    s in
+                    suppliers), GRB.LESS_EQUAL, AT[j, r],
+                name="constraint_8_project_%d_resource_%s_deliver" % (j, r))
 
     m.update()
 
     expr = LinExpr()
     for j in range(D.project_n):
-        expr.add(delta_weight[j] * AT[j])
+        for r in sorted([r for (r, p_) in D.resource_project_demand.keys() if p_ == p]):
+            expr.add(delta_weight[_delta_project_idx[j, r]] * AT[j, r])
     m.setObjective(expr, GRB.MINIMIZE)
     m.update()
     ##########################################
@@ -395,9 +405,10 @@ def _objective_function_for_tardiness(x, D):
 
 def heuristic_ga_optimize(input_path, out_path):
     start = time.clock()
-    global _last_x, _last_CT, _pool, _delta_trace
+    global _last_x, _last_CT, _pool, _delta_trace, _delta_dim, _delta_project_idx
     _tardiness_obj_trace.clear()
     _delta_trace.clear()
+    _delta_project_idx.clear()
     _CT_map.clear()
     _last_x = None
     _last_CT = None
@@ -409,15 +420,23 @@ def heuristic_ga_optimize(input_path, out_path):
     creator.create("FitnessMax", base.Fitness, weights=(1.0,))
     creator.create("Individual", list, fitness=creator.FitnessMax)
     toolbox = base.Toolbox()
-    toolbox.register("individual", _random_delta_weight_for_projects, D.project_n, creator.Individual)
+
+    _delta_dim = 0
+    for j in range(D.project_n):
+        p = D.project_list[j]
+        for r in sorted([r_ for (r_, p_) in D.resource_project_demand.keys() if p_ == p]):
+            _delta_project_idx[j, r] = _delta_dim
+            _delta_dim += 1
+
+    toolbox.register("individual", _random_delta_weight_for_projects, _delta_dim, creator.Individual)
     toolbox.register("population", tools.initRepeat, creator.Individual, toolbox.individual)
     toolbox.register("evaluate", _objective_function_for_delta_weight, D)
     toolbox.register("mate", _mate)
-    toolbox.register("mutate", _mutate, mutate_prob=0.05)
+    toolbox.register("mutate", _mutate, mutate_prob=0.25)
     toolbox.register("select", tools.selTournament, tournsize=3)
     # print()
 
-    pop = toolbox.population(n=10)
+    pop = toolbox.population(n=1)
     hof = tools.HallOfFame(1)
 
     # print(toolbox.individual())

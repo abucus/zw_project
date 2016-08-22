@@ -18,7 +18,7 @@ def load_data(path='C:/Users/mteng/Desktop/small case/'):
     project_list = first_row[1:]
     resource_project_demand = {}
     for row in resource_project_file:
-        #print('row[0]',row)
+        # print('row[0]',row)
         if row[0] not in resource_list:
             resource_list.append(row[0])
             for i in range(1, len(row)):
@@ -101,10 +101,18 @@ def load_data(path='C:/Users/mteng/Desktop/small case/'):
     # ##################################################
     #
     # # Constant
-    # B=500000000
-    B = 800000000
+    B = 5e5 * project_n
+    # B = 800000000
     M = 100000000
 
     return Data(supplier_project_shipping, project_list, project_activity, DD, resource_supplier_capacity, \
-    project_n, resource_project_demand, resource_supplier_list, M, c, B, resource_supplier_release_time, \
-    review_duration, w)
+                project_n, resource_project_demand, resource_supplier_list, M, c, B, resource_supplier_release_time, \
+                review_duration, w)
+
+
+if __name__ == '__main__':
+    D = load_data('C:/Users/mteng/Desktop/small case/')
+    print('resource_supplier_capacity:')
+    print(D.resource_supplier_capacity)
+    print('resource_supplier:')
+    print(D.resource_supplier_release_time)
