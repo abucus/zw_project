@@ -1,11 +1,13 @@
 from __future__ import print_function
-import random
-from random import randint as uniform_number
-from random import gauss as normal_number
+
 import csv
+import random
+from random import gauss as normal_number
+from random import randint as uniform_number
+from scipy.stats import norm
+import math
+
 import networkx as nx
-import os
-import xlrd
 
 
 def generate_input(path='./generated/', output_path='./case1/', project_num_range=[40, 45],
@@ -140,6 +142,8 @@ def generate_input(path='./generated/', output_path='./case1/', project_num_rang
     writer5 = csv.writer(open(output_path + 'supplier_project_cost.csv', 'w', newline=''))
     writer6 = csv.writer(open(output_path + 'supplier_project_shipping.csv', 'w', newline=''))
     current_supplier = 0
+    supplier_project_cost_dict = dict()
+
     for row in resource_type_list:
         this_resource_supplier_num = uniform_number(
             *supplier_num_for_resource)  # how many supplier for this resource #####change running time
@@ -154,8 +158,26 @@ def generate_input(path='./generated/', output_path='./case1/', project_num_rang
             arr2.append(row)
             arr2.append("S" + str(row2))
             for row3 in project_list:
-                arr1.append(normal_number(*supplier_project_cost))  # supplier to project cost
-                arr2.append(uniform_number(*supplier_project_shipping_time))  # supplier to project shipping time
+                shipping_cost = normal_number(*supplier_project_cost)
+                # shipping_cost = normal_number(*supplier_project_cost)
+                arr1.append(shipping_cost)  # supplier to project cost
+
+                normalized_shipping_cost = 1. * (shipping_cost - supplier_project_cost[0]) / supplier_project_cost[1]
+
+                percentile = norm.cdf(normalized_shipping_cost)
+
+                shipping_time_base = int(supplier_project_shipping_time[0] + (1 - percentile) * (
+                    supplier_project_shipping_time[1] - supplier_project_shipping_time[0]))
+
+                shipping_time_range = (max(supplier_project_shipping_time[0], shipping_time_base - 1),
+                                       min(supplier_project_shipping_time[1], shipping_time_base + 1))
+                print(shipping_cost)
+                print(normalized_shipping_cost)
+                print(percentile)
+                print(shipping_time_range)
+                arr2.append(uniform_number(*shipping_time_range))  # supplier to project shipping time
+
+                # arr2.append(uniform_number(*supplier_project_shipping_time))  # supplier to project shipping time
             writer5.writerow([rowss for rowss in arr1])
             writer6.writerow([rowss for rowss in arr2])
         current_supplier += this_resource_supplier_num
@@ -206,10 +228,23 @@ def solvable_check(path='./case1/'):
 
 if __name__ == '__main__':
     import os
+    from os.path import exists
 
     print(os.getcwd())
-    generate_input(project_num_range=[15, 20],
-                   resource_type_num_range=[10, 12],
-                   non_renew_resource_type_num_range=[9, 12],
-                   supplier_num_for_resource=[8, 10])
+    base_path = './by_project_small_resource/P=%d/'
+    i = 10
+    while i < 50:
+        path = base_path % i
+        if not exists(path):
+            os.makedirs(path)
+        generate_input(project_num_range=[i, i + 1],
+                       resource_type_num_range=[5, 8],
+                       non_renew_resource_type_num_range=[5, 8],
+                       supplier_num_for_resource=[12, 35],
+                       resource_supplier_capacity=[500, 100],
+                       supplier_project_cost=[1000, 200], supplier_project_shipping_time=[1, 15],
+                       output_path=path)
+        solvable = solvable_check()
+        if solvable:
+            i += 5
     print(solvable_check())

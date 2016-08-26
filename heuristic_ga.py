@@ -3,7 +3,6 @@ import random
 import time
 from multiprocessing.pool import Pool
 
-import numpy as np
 from deap import algorithms
 from deap import base
 from deap import creator
@@ -12,7 +11,7 @@ from gurobipy import Model, GRB, quicksum, LinExpr
 
 from input_data import load_data
 
-logging.basicConfig(filename='example.log', level=logging.DEBUG)
+logging.basicConfig(filename='heuristic_ga.log', level=logging.DEBUG)
 
 _tardiness_obj_trace = []
 _last_x = None
