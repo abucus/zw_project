@@ -1,4 +1,4 @@
-def load_data(path='C:/Users/mteng/Desktop/small case/'):
+def load_data(path='C:/Users/mteng/Desktop/small case/', budget_per_project=5e7):
     # path='C:\Users\liujm\Desktop\zhengwei proposal\\final_project\Inputs'
 
     from collections import namedtuple
@@ -89,21 +89,23 @@ def load_data(path='C:/Users/mteng/Desktop/small case/'):
 
     #####load project review duration
     review_duration = []
+    DD = []
     project_review_due = csv.reader(open(path + '\\project_review_due.csv', 'r'))
     for row in project_review_due:
         review_duration.append(float(row[1]))
+        DD.append(float(row[2]))
 
     w = [1 for i in range(project_n)]  # need to change, project budget?
 
-    random.seed(17)
-    DD = [random.randint(30, 40) for i in range(project_n)]  # project_due_day
+    # random.seed(17)
+    # DD = [random.randint(30, 40) for i in range(project_n)]  # project_due_day
 
     # ##################################################
     #
     # # Constant
-    B = 5e5 * project_n
+    B = budget_per_project * project_n
     # B = 800000000
-    M = 100000000
+    M = 1e8
 
     return Data(supplier_project_shipping, project_list, project_activity, DD, resource_supplier_capacity, \
                 project_n, resource_project_demand, resource_supplier_list, M, c, B, resource_supplier_release_time, \

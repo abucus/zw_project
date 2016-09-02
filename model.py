@@ -1,10 +1,13 @@
-from __future__ import print_function
-from input_data import load_data
-from gurobipy import *
-from os import makedirs
-from os.path import join
-from os.path import exists
+#from __future__ import print_function
+
 import time
+from os import makedirs
+from os.path import exists
+from os.path import join
+
+from gurobipy import *
+
+from input_data import load_data
 
 
 # Create optimization model
@@ -19,8 +22,10 @@ def original_model(input_path, output_path):
 
     start_time = time.clock()
     m = Model('construction')
+    #m.setParam('OutputFlag', False)
     ##############################################################
     m.params.presolve = 0
+    #m.params.IntFeasTol = 1e-9
     # Create variables############################################
     #####supplier-project shipping decision x and shipping quality
     x = {}
@@ -28,7 +33,8 @@ def original_model(input_path, output_path):
     for (i, j, k) in supplier_project_shipping:
         # i resource, j supplier, k project
         x[i, j, k] = m.addVar(obj=0, vtype=GRB.BINARY, name="x_%s_%s_%s" % (i, j, k))
-        q[i, j, k] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="q_%s_%s_%s)" % (i, j, k))
+        q[i, j, k] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="q_%s_%s_%s" % (i, j, k))
+    print('add var x,q')
     #####Project complete data,Project Tadeness,construction completion time
     DT = {}
     TD = {}
@@ -38,14 +44,14 @@ def original_model(input_path, output_path):
         DT[j] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="DT_%d" % j)  # project j complete time
         TD[j] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="TD_%d" % j)  # project j complete time
         CT[j] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="CT_%d" % j)  # project j complete time
-
+    print('add var DT TD CT')
     #####Activity start time
     ST = []
     for j in range(project_n):
         ST.append({})
         for row in project_activity[project_list[j]].nodes():
             ST[j][row] = m.addVar(obj=0, vtype=GRB.CONTINUOUS, name="ST_%d_%s" % (j, row))
-
+    print('add var ST')
     #####Review sequence
     z = {}
     for i in range(project_n):
@@ -55,7 +61,7 @@ def original_model(input_path, output_path):
 
     for j in range(project_n):
         z[-1, j] = m.addVar(obj=0, vtype=GRB.BINARY, name="z_%d_%d" % (-1, j))
-
+    print('add var z')
     #####
     y = {}
     for j in range(project_n):
@@ -66,36 +72,37 @@ def original_model(input_path, output_path):
                         list(set(project_activity[project_list[j]].node[row1]['rk_resources']).intersection(
                             project_activity[project_list[j]].node[row2]['rk_resources']))) > 0:
                     y[j, row1, row2] = m.addVar(obj=0, vtype=GRB.BINARY, name="y_%d_%s_%s" % (j, row1, row2))
+    print('add var y')
     m.update()
     # create constrains#########################################
     #####Constrain 2: project complete data>due data
     for j in range(project_n):
         m.addConstr(DT[j] - TD[j], GRB.LESS_EQUAL, DD[j], name="constraint_2_project_%d" % j)
-
+    print('add constr 2')
     ##### constrain 3: supplier capacity limit
     for (row1, row2) in resource_supplier_capacity:
         m.addConstr(quicksum(q[row1, row2, project_list[j]] for j in range(project_n)), GRB.LESS_EQUAL,
                     resource_supplier_capacity[row1, row2], name="constraint_3_resource_%s_supplier_%s" % (row1, row2))
-
+    print('add constr 3')
     #####constrain 4,6: project demand require; each project receive from one supplier for each resource
     for (row1, row2) in resource_project_demand:
         m.addConstr(quicksum(x[row1, i, row2] for i in resource_supplier_list[row1]), GRB.EQUAL, 1,
                     name="constraint_6_resource_%s_project_%s" % (row1, row2))
         m.addConstr(quicksum(q[row1, i, row2] for i in resource_supplier_list[row1]), GRB.GREATER_EQUAL,
                     resource_project_demand[row1, row2], name="constraint_4_resource_%s_project_%s" % (row1, row2))
-
+    print('add constr 4,6')
     #####constrain 5: shipping constrain
     for (i, j, k) in q:
         # i resource, j supplier, k project
         m.addConstr(q[i, j, k], GRB.LESS_EQUAL, M * x[i, j, k],
                     name="constraint_5_resource_%s_supplier_%s_project_%s" % (i, j, k))
-
+    print('add constr 5')
     #####constrain 7:budget limit
     expr = LinExpr()
     for (i, j, k) in q:
-        expr = expr + c[i, j, k] * q[i, j, k]
+        expr.addTerms(c[i, j, k], q[i, j, k])
     m.addConstr(expr, GRB.LESS_EQUAL, B, name="constraint_7")
-
+    print('add constr 7')
     #####constrain 8: activity starting constrain
     for j in range(project_n):
         for row in project_activity[project_list[j]].nodes():
@@ -105,14 +112,14 @@ def original_model(input_path, output_path):
                                      in
                                      resource_supplier_list[row1]), GRB.LESS_EQUAL, ST[j][row],
                             name="constraint_8_project_%d_activity_%s_resource_%s" % (j, row, row1))
-
+    print('add constr 8')
     #####constrain 9 activity sequence constrain
     for j in range(project_n):
         for row1, row2 in project_activity[project_list[j]].edges():
             m.addConstr(ST[j][row1] + project_activity[project_list[j]].node[row1]['duration'], GRB.LESS_EQUAL,
                         ST[j][row2],
                         name="constraint_9_project_%d_activity_%s_activity_%s" % (j, row1, row2))
-
+    print('add constr 9')
     #####constrain 10,11
     for j in range(project_n):
         for row1 in project_activity[project_list[j]].nodes():
@@ -130,36 +137,40 @@ def original_model(input_path, output_path):
                         GRB.LESS_EQUAL, ST[j][row1],
                         name="constraint_11_project_%d_activity_%s_activity_%s" % (j, row1, row2))
                     # m.addConstr(y[j,row1,row2]+y[j,row2,row1],GRB.LESS_EQUAL,1)
-
+    print('add constr 10 11')
     #####constrain 12
     for j in range(project_n):
         for row in project_activity[project_list[j]].nodes():
             m.addConstr(CT[j], GRB.GREATER_EQUAL, ST[j][row] + project_activity[project_list[j]].node[row]['duration'],
                         name="constraint_12_project_%d_activity_%s" % (j, row))
-
+    print('add constr 12')
     #####constrain 13
     for j in range(project_n):
         m.addConstr(DT[j], GRB.GREATER_EQUAL, CT[j] + review_duration[j], name="constraint_13_project_%d" % j)
-
+    print(review_duration[15])
+    import sys
+    sys.exit(0)
+    print('add constr 13')
     #####constrain 14
     for i in range(-1, project_n):
         for j in range(project_n):
             if i != j:
                 m.addConstr(DT[j], GRB.GREATER_EQUAL, DT[i] - M * (1 - z[i, j]) + review_duration[j],
                             name="constraint_14_project_%d_project_%d" % (i, j))
-
+    print('add constr 14')
     #####constrain 15
     for j in range(project_n):
         m.addConstr(quicksum(z[i, j] for i in range(-1, project_n) if i != j), GRB.EQUAL, 1,
                     name="constraint_15_project_%d" % j)
-
+    print('add constr 15')
     #####constrain 16
     m.addConstr(quicksum(z[-1, j] for j in range(project_n)), GRB.EQUAL, 1, name="constraint_16")
-
+    print('add constr 16')
     #####constrain 17
     for i in range(project_n):
         m.addConstr(quicksum(z[i, j] for j in range(project_n) if j != i), GRB.LESS_EQUAL, 1,
                     name="constraint_17_project_%d" % i)
+    print('add constr 17')
     m.update()
 
     # for i in range(project_n):
@@ -170,7 +181,8 @@ def original_model(input_path, output_path):
     # Set optimization objective - minimize sum of
     expr = LinExpr()
     for j in range(project_n):
-        expr.add(w[j] * TD[j])
+        expr.addTerms(w[j], TD[j])
+    print('add obj')
     m.setObjective(expr, GRB.MINIMIZE)
     m.update()
     ##########################################
@@ -180,8 +192,8 @@ def original_model(input_path, output_path):
     # m.params.presolve=0
     m.optimize()
     print('project_n=%d' % project_n)
-    for j in range(project_n):
-        print(len(project_activity[project_list[j]].edges()))
+    # for j in range(project_n):
+    #     print(len(project_activity[project_list[j]].edges()))
 
     time_cost = time.clock() - start_time
     print('time cost=', time_cost)
@@ -189,36 +201,29 @@ def original_model(input_path, output_path):
     m.write(join(output_path, 'original.lp'))
     m.write(join(output_path, 'original.sol'))
 
-    return m.objVal, time_cost, m
+    print('objective value=', m.objVal)
+
+    return m.objVal, time_cost
 
 
-# print decision variables
-# print 'review sequence', [row for row in z if z[row].x>=0.98]
-# print 'supplier-project-order', [row for row in x if x[row].x>=0.98]
-# print 'supplier-prject-quality', [[row,q[row].x] for row in q if q[row].x>0]
-# print 'rk_resource_order', [[row,y[row].x] for row in y if y[row].x>0.98]
-# print 'ST#########################'
-# for j in range(project_n):
-#     print [[j,row,ST[j][row].x] for row in ST[j]]
-#
-# print 'DT[project_id,DT]', [[row,DT[row].x] for row in DT]
-# print 'CT[project_id,CT]', [[row,CT[row].x] for row in CT]
-# print 'DD[project_id,DD]', [[row,DD[row]] for row in range(project_n)]
-# print 'TD[project_id,TD]', [[row,TD[row].x] for row in TD]
 if __name__ == "__main__":
-    from sys import exit
-
     # 'C:/Users/mteng/Desktop/small case'
-    data_path = './Inputs/case1/';
-    D = load_data(data_path)
-    # exit(0)
-    (objVal, cost, m) = original_model(data_path, 'C:/Users/mteng/Desktop/MIP/')
+    # data_path = './Inputs/case1/';
 
-    print('ObjVal', objVal, 'cost', cost, m.Status == GRB.OPTIMAL)
-    # D = load_data('./Inputs/case1')
+    ### run single
+    data_path = './Inputs/P=15'
+    (objVal, cost) = original_model(data_path, './output')
 
-    from resulat_analysis import project_resource_suppliery_analyze
 
-    project_resource_suppliery_analyze(m, D.project_list, D.w, D.resource_project_demand, D.review_duration,
-                                       D.resource_supplier_list, D.resource_supplier_capacity,
-                                       D.resource_supplier_release_time, D.c, D.DD)
+    ### run in batch
+    # import pandas as pd
+    #
+    # d = pd.DataFrame(columns=["Project Size", "Objective Value", "Time Cost"])
+    # d_idx = 0
+    # for i in range(10, 50, 5):
+    #     data_path = './Inputs/P=%d' % i
+    #     (objVal, cost) = original_model(data_path, './output')
+    #     d.loc[d_idx] = [i, objVal, cost]
+    #     d_idx += 1
+    #     # print('ObjVal', objVal, 'cost', cost)
+    # d.to_csv('original_MIP_model.csv', index=False)

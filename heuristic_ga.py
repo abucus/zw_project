@@ -54,9 +54,9 @@ def _normalize(arr):
 
 
 def _random_delta_weight_for_projects(num, Type):
-    rlt = Type([1]*num)
-    #rlt = Type(np.random.random_sample(num).tolist())
-    #rlt = [1]*num
+    rlt = Type([1] * num)
+    # rlt = Type(np.random.random_sample(num).tolist())
+    # rlt = [1]*num
     return _normalize(rlt)
 
 
@@ -128,9 +128,9 @@ def _objective_function_for_delta_weight(D, delta_weight):
         for r in project_resources:
             suppliers = D.resource_supplier_list[r]
 
-            #print(list(D.supplier_project_shipping.keys())[:10])
+            # print(list(D.supplier_project_shipping.keys())[:10])
             # print(D.supplier_project_shipping['NK0g77', 'S1671', 'P1'])
-            #print(list(x.keys())[:10])
+            # print(list(x.keys())[:10])
             # print(x['NK0g77', 'S1671', 'P1'])
             m.addConstr(
                 quicksum(
@@ -153,19 +153,27 @@ def _objective_function_for_delta_weight(D, delta_weight):
     # Solve
     # m.params.presolve=0
     m.optimize()
-
+    print(m.Status)
     X_ = {}
     for (i, j, k) in D.supplier_project_shipping:
         v = m.getVarByName("x_%s_%s_%s" % (i, j, k))
+        print(v)
         if v.X == 1:
             X_[i, j, k] = 1
 
-    return -_objective_function_for_tardiness(X_, D),
+    AT_ = {}
+    for j, r in AT:
+        val = AT[j, r].X
+        if val > 0:
+            AT_[j, r] = val
+
+    return -_objective_function_for_tardiness(X_, AT_, D),
 
 
-def optmize_single_project(x, j, project_list, project_activity, resource_supplier_list, resource_supplier_release_time,
-                           supplier_project_shipping, M):
+def optmize_single_project(AT, j, project_list, project_activity, M):
     m = Model("SingleProject_%d" % j)
+    m.setParam(GRB.Param.Method, 0)
+    m.update()
 
     #### Create variables ####
     project = project_list[j]
@@ -215,19 +223,11 @@ def optmize_single_project(x, j, project_list, project_activity, resource_suppli
     ## Constrain 8: activity starting constrain
     for a in project_activities.nodes():
         for r in project_activities.node[a]['resources']:
-            resource_delivered_days = 0
-            for s in resource_supplier_list[r]:
-                resource_delivered_days += x.get((r, s, project), 0) * \
-                                           (resource_supplier_release_time[r, s] +
-                                            supplier_project_shipping[
-                                                r, s, project])
-            m.addConstr(resource_delivered_days, GRB.LESS_EQUAL, ST[a],
+            m.addConstr(AT[j, r], GRB.LESS_EQUAL, ST[a],
                         name="constraint_8_project_%d_activity_%s_resource_%s" % (j, a, r))
 
     ## Constrain 9 activity sequence constrain
     for row1, row2 in project_activities.edges():
-        # print(row1, '#', row2, '#', j)
-        # print(ST)
         m.addConstr(ST[row1] + project_activities.node[row1]['duration'], GRB.LESS_EQUAL,
                     ST[row2], name="constraint_9_project_%d_activity_%s_activity_%s" % (j, row1, row2))
 
@@ -278,10 +278,16 @@ def optmize_single_project(x, j, project_list, project_activity, resource_suppli
     m.update()
     # Solve
     # m.params.presolve=0
+
     m.optimize()
     # m.write(join(output_dir, "heuristic_%d.lp" % j))
     # m.write(join(output_dir, "heuristic_%d.sol" % j))
-    logging.info("project %d with optimalVal %r" % (j, m.objVal))
+    # logging.info("project %d with optimalVal %r" % (j, m.objVal))
+    print(m.status == GRB.OPTIMAL)
+    for c in m.getConstrs():
+        if c.ConstrName.startswith('constraint_8_project'):
+            c.getAttr(GRB.Attr.SARHSLow)
+            logging.info('%s shadow price (%f,%f)' % (c.ConstrName, c.SARHSLow, c.SARHSUp))
     return m.objVal
 
 
@@ -291,15 +297,15 @@ def _get_project_to_recompute(x, project_n, project_list):
     # logging.info('x keys:%r' % x.keys())
     # logging.info('last x keys:%r' % _last_x.keys())
     diffs_proj = set(p for r, s, p in (x.keys() ^ _last_x.keys()))
-    logging.info('diffs_proj:%r' % diffs_proj)
+    # logging.info('diffs_proj:%r' % diffs_proj)
     diffs_proj_idx = sorted([project_list.index(p) for p in diffs_proj])
     same_proj_idx = [i for i in range(project_n) if project_list[i] not in diffs_proj]
-    logging.info("project    recompute idx:%r" % diffs_proj_idx)
-    logging.info("project no-recompute idx:%r" % same_proj_idx)
+    # logging.info("project    recompute idx:%r" % diffs_proj_idx)
+    # logging.info("project no-recompute idx:%r" % same_proj_idx)
     return diffs_proj_idx, same_proj_idx
 
 
-def _objective_function_for_tardiness(x, D):
+def _objective_function_for_tardiness(x, AT, D):
     global _last_CT, _last_x, _pool
     m = Model("Overall_Model")
 
@@ -311,14 +317,13 @@ def _objective_function_for_tardiness(x, D):
         p = D.project_list[j]
         history_CT = _get_CT(p, project_suppliers[p])
         if history_CT is None:
-            CT_ASYNC[j] = _pool.apply_async(optmize_single_project,
-                                            (x, j, D.project_list, D.project_activity, D.resource_supplier_list,
-                                             D.resource_supplier_release_time,
-                                             D.supplier_project_shipping, D.M))
+            CT[j] = optmize_single_project(AT, j, D.project_list, D.project_activity, D.M)
+            # CT_ASYNC[j] = _pool.apply_async(optmize_single_project,
+            #                                 (AT, j, D.project_list, D.project_activity, D.M))
         else:
             # logging.info('%s [%s]' % (p, ','.join(sorted(project_suppliers[p]))))
             CT[j] = history_CT
-            logging.info('project %s get historical value %f.' % (p, history_CT))
+            # logging.info('project %s get historical value %f.' % (p, history_CT))
 
     for j in CT_ASYNC:
         CT[j] = CT_ASYNC[j].get()
@@ -398,7 +403,7 @@ def _objective_function_for_tardiness(x, D):
 
     # self.obj_value_trace.append(m.objVal)
     _tardiness_obj_trace.append(m.objVal)
-    logging.info("Tardiness value:%r" % m.objVal)
+    # logging.info("Tardiness value:%r" % m.objVal)
     return m.objVal
 
 
