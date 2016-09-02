@@ -11,9 +11,9 @@ import networkx as nx
 
 
 def generate_input(path='./generated/', output_path='./case1/', project_num_range=[40, 45],
-                   resource_type_num_range=[50, 150],
-                   non_renew_resource_type_num_range=[50, 140], project_review_range=[1, 5],
-                   project_review_range2=[300, 350], activity_num_range=[30, 45], project_activity_duration=[10, 30],
+                   nk_resource_type_num_range=[50, 150],
+                   rk_resource_type_num_range=[50, 140], project_review_days_range=[1, 5],
+                   project_due_days_range=[30, 40], activity_num_range=[30, 45], project_activity_duration=[10, 30],
                    resource_project_demand=[10, 100], supplier_num_for_resource=[40, 45],
                    resource_supplier_capacity=[500, 80], resource_supplier_release_time=[20, 5],
                    supplier_project_cost=[1000, 100], supplier_project_shipping_time=[1, 7]):
@@ -56,17 +56,17 @@ def generate_input(path='./generated/', output_path='./case1/', project_num_rang
     project_list = ["P" + str(i) for i in range(1, project_n + 1)]
     # print project_list
 
-    resource_type_n = uniform_number(*resource_type_num_range)  # NK type number
+    resource_type_n = uniform_number(*nk_resource_type_num_range)  # NK type number
     resource_type_list = ["NK0g" + str(i) for i in range(1, resource_type_n + 1)]
 
-    non_renew_resource_type_n = uniform_number(*non_renew_resource_type_num_range)  # RK type number
+    non_renew_resource_type_n = uniform_number(*rk_resource_type_num_range)  # RK type number
     non_renew_resource_type_list = ["RK0" + str(i) for i in range(1, non_renew_resource_type_n + 1)]
 
     # generate project_review_due
     writer = csv.writer(open(output_path + "project_review_due.csv", 'w', newline=''))
     for row in project_list:
-        writer.writerow([row, uniform_number(*project_review_range),
-                         uniform_number(*project_review_range2)])  # modify project_revie_due
+        writer.writerow([row, uniform_number(*project_review_days_range),
+                         uniform_number(*project_due_days_range)])  # modify project_revie_due
 
     # generate project activity_duration,project_activity
     writer2 = csv.writer(open(output_path + "project_activity_duration.csv", 'w', newline=''))
@@ -230,16 +230,15 @@ if __name__ == '__main__':
     import os
     from os.path import exists
 
-    print(os.getcwd())
-    base_path = './by_project_small_resource/P=%d/'
+    base_path = './P=%d/'
     i = 10
     while i < 50:
         path = base_path % i
         if not exists(path):
             os.makedirs(path)
         generate_input(project_num_range=[i, i + 1],
-                       resource_type_num_range=[5, 8],
-                       non_renew_resource_type_num_range=[5, 8],
+                       nk_resource_type_num_range=[15, 20],
+                       rk_resource_type_num_range=[5, 8],
                        supplier_num_for_resource=[12, 35],
                        resource_supplier_capacity=[500, 100],
                        supplier_project_cost=[1000, 200], supplier_project_shipping_time=[1, 15],
