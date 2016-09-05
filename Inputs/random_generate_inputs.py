@@ -2,21 +2,19 @@ from __future__ import print_function
 
 import csv
 import random
-from random import gauss as normal_number
 from random import randint as uniform_number
-from scipy.stats import norm
-import math
 
 import networkx as nx
+from scipy.stats import uniform
 
 
 def generate_input(path='./generated/', output_path='./case1/', project_num_range=[40, 45],
-                   nk_resource_type_num_range=[50, 150],
-                   rk_resource_type_num_range=[50, 140], project_review_days_range=[1, 5],
-                   project_due_days_range=[30, 40], activity_num_range=[30, 45], project_activity_duration=[10, 30],
-                   resource_project_demand=[10, 100], supplier_num_for_resource=[40, 45],
-                   resource_supplier_capacity=[500, 80], resource_supplier_release_time=[20, 5],
-                   supplier_project_cost=[1000, 100], supplier_project_shipping_time=[1, 7]):
+                   nk_resource_type_num_range=[15, 20],
+                   rk_resource_type_num_range=[5, 10], project_review_days_range=[1, 5],
+                   activity_num_range=[10, 15], project_activity_duration=[10, 30],
+                   resource_project_demand=[10, 100],
+                   resource_supplier_capacity=[300, 600], resource_supplier_release_time=[10, 20],
+                   supplier_project_cost=[8, 12], supplier_project_shipping_time=[1, 7]):
     # generate activity network pool
     random.seed(11)  # specify random set
     dir = os.listdir(path)
@@ -54,6 +52,7 @@ def generate_input(path='./generated/', output_path='./case1/', project_num_rang
 
     project_n = uniform_number(*project_num_range)  # project number
     project_list = ["P" + str(i) for i in range(1, project_n + 1)]
+    supplier_num_for_resource = [3 * project_n, 5 * project_n]
     # print project_list
 
     resource_type_n = uniform_number(*nk_resource_type_num_range)  # NK type number
@@ -66,7 +65,7 @@ def generate_input(path='./generated/', output_path='./case1/', project_num_rang
     writer = csv.writer(open(output_path + "project_review_due.csv", 'w', newline=''))
     for row in project_list:
         writer.writerow([row, uniform_number(*project_review_days_range),
-                         uniform_number(*project_due_days_range)])  # modify project_revie_due
+                         0])  # modify project_revie_due
 
     # generate project activity_duration,project_activity
     writer2 = csv.writer(open(output_path + "project_activity_duration.csv", 'w', newline=''))
@@ -85,11 +84,12 @@ def generate_input(path='./generated/', output_path='./case1/', project_num_rang
             # print len(resource_type_list),resource_type_n
 
             # NK activity required resource number and list
-            resource_require_list = random.sample(resource_type_list, uniform_number(5, resource_type_n))
+            resource_require_list = random.sample(resource_type_list,
+                                                  uniform_number(2, min(5, non_renew_resource_type_n)))
 
             # RK activity required resource number ad list
             non_renew_resource_require_list = random.sample(non_renew_resource_type_list,
-                                                            uniform_number(5, non_renew_resource_type_n))
+                                                            uniform_number(2, min(5, non_renew_resource_type_n)))
             this_resource_list = ''
             for row22 in resource_require_list:
                 this_resource_list += row22 + str(" ")
@@ -148,8 +148,8 @@ def generate_input(path='./generated/', output_path='./case1/', project_num_rang
         this_resource_supplier_num = uniform_number(
             *supplier_num_for_resource)  # how many supplier for this resource #####change running time
         for row2 in range(current_supplier, current_supplier + this_resource_supplier_num):
-            writer4.writerow([row, "S" + str(row2), int(normal_number(*resource_supplier_capacity)),
-                              int(normal_number(
+            writer4.writerow([row, "S" + str(row2), int(uniform_number(*resource_supplier_capacity)),
+                              int(uniform_number(
                                   *resource_supplier_release_time))])  # resource- supplier capacity & release time
             arr1 = []
             arr2 = []
@@ -158,13 +158,14 @@ def generate_input(path='./generated/', output_path='./case1/', project_num_rang
             arr2.append(row)
             arr2.append("S" + str(row2))
             for row3 in project_list:
-                shipping_cost = normal_number(*supplier_project_cost)
+                shipping_cost = uniform_number(*supplier_project_cost)
                 # shipping_cost = normal_number(*supplier_project_cost)
                 arr1.append(shipping_cost)  # supplier to project cost
 
-                normalized_shipping_cost = 1. * (shipping_cost - supplier_project_cost[0]) / supplier_project_cost[1]
+                normalized_shipping_cost = 1. * (shipping_cost - supplier_project_cost[0]) / (
+                    supplier_project_cost[1] - supplier_project_cost[0])
 
-                percentile = norm.cdf(normalized_shipping_cost)
+                percentile = uniform.cdf(normalized_shipping_cost)
 
                 shipping_time_base = int(supplier_project_shipping_time[0] + (1 - percentile) * (
                     supplier_project_shipping_time[1] - supplier_project_shipping_time[0]))
@@ -230,18 +231,58 @@ if __name__ == '__main__':
     import os
     from os.path import exists
 
+    # path = './P=5/'
+    # if not exists(path):
+    #     os.makedirs(path)
+    # generate_input(project_num_range=[3, 3],  #
+    #                activity_num_range=[5, 5],  #
+    #                nk_resource_type_num_range=[5, 5],  #
+    #                output_path=path)
+    # solvable = solvable_check()
+    # print(solvable)
+
+    # generate project data
     base_path = './P=%d/'
-    i = 10
-    while i < 50:
+    i = 3
+    while i < 10:
         path = base_path % i
         if not exists(path):
             os.makedirs(path)
-        generate_input(project_num_range=[i, i + 1],
-                       nk_resource_type_num_range=[15, 20],
-                       rk_resource_type_num_range=[5, 8],
-                       supplier_num_for_resource=[12, 35],
-                       resource_supplier_capacity=[500, 100],
-                       supplier_project_cost=[1000, 200], supplier_project_shipping_time=[1, 15],
+        generate_input(project_num_range=[i, i],  #
+                       activity_num_range=[5, 5],  #
+                       nk_resource_type_num_range=[5, 5],  #
+                       output_path=path)
+        solvable = solvable_check()
+        if solvable:
+            i += 2
+    print(solvable_check())
+
+    # generate activity data
+    base_path = './A=%d/'
+    i = 5
+    while i < 10:
+        path = base_path % i
+        if not exists(path):
+            os.makedirs(path)
+        generate_input(project_num_range=[5, 5],  #
+                       activity_num_range=[i, i],  #
+                       nk_resource_type_num_range=[5, 5],  #
+                       output_path=path)
+        solvable = solvable_check()
+        if solvable:
+            i += 1
+    print(solvable_check())
+
+    # generate nk resource data
+    base_path = './NKR=%d/'
+    i = 5
+    while i < 16:
+        path = base_path % i
+        if not exists(path):
+            os.makedirs(path)
+        generate_input(project_num_range=[5, 5],  #
+                       activity_num_range=[5, 5],  #
+                       nk_resource_type_num_range=[i, i],  #
                        output_path=path)
         solvable = solvable_check()
         if solvable:

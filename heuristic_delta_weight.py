@@ -139,7 +139,7 @@ def _objective_function_for_delta_weight(D, delta_weight, d1, d2):
     m.setObjective(expr, GRB.MINIMIZE)
     m.update()
     ##########################################
-    m.params.presolve = 1
+    # m.params.presolve = 1
     m.update()
     # Solve
     # m.params.presolve=0
@@ -250,7 +250,7 @@ def _sensitivity_for_constraints(AT, j, project, y_, project_activity, M):
     m.setObjective(expr, GRB.MINIMIZE)
     m.update()
     ##########################################
-    m.params.presolve = 1
+    # m.params.presolve = 1
     m.update()
     m.setParam(GRB.Param.Method, 0)
     m.update()
@@ -280,7 +280,7 @@ def _sensitivity_for_constraints(AT, j, project, y_, project_activity, M):
 
 def optimize_single_project(AT, j, project_list, project_activity, M):
     m = Model("SingleProject_%d" % j)
-    m.setParam('OutputFlag', False)
+    # m.setParam('OutputFlag', False)
     # m.params.IntFeasTol = 1e-7
 
     #### Create variables ####
@@ -348,7 +348,7 @@ def optimize_single_project(AT, j, project_list, project_activity, M):
     m.setObjective(expr, GRB.MINIMIZE)
     m.update()
     ##########################################
-    m.params.presolve = 1
+    # m.params.presolve = 1
     m.update()
     # Solve
     # m.params.presolve=0
@@ -412,7 +412,7 @@ def _sensitivity_analysis_for_tardiness(z, CT, D):
     m.setObjective(expr, GRB.MINIMIZE)
     m.update()
 
-    m.params.presolve = 1
+    # m.params.presolve = 1
     m.update()
 
     m.optimize()
@@ -437,7 +437,7 @@ def _sensitivity_analysis_for_tardiness(z, CT, D):
 def _objective_function_for_tardiness(x, AT, D):
     global _last_CT, _last_x, _pool
     m = Model("Overall_Model")
-    m.setParam('OutputFlag', False)
+    # m.setParam('OutputFlag', False)
     # m.params.IntFeasTol = 1e-7
 
     CT = {}
@@ -447,7 +447,7 @@ def _objective_function_for_tardiness(x, AT, D):
     critical_project_resource = dict()
     for j in range(D.project_n):
         p = D.project_list[j]
-        #history_CT = _get_CT(p, project_suppliers[p])
+        # history_CT = _get_CT(p, project_suppliers[p])
         CT_ASYNC[j] = _pool.apply_async(optimize_single_project,
                                         (AT, j, D.project_list, D.project_activity, D.M))
         # if history_CT is None:
@@ -522,7 +522,7 @@ def _objective_function_for_tardiness(x, AT, D):
     m.setObjective(expr, GRB.MINIMIZE)
     m.update()
 
-    m.params.presolve = 1
+    # m.params.presolve = 1
     m.update()
 
     m.optimize()
@@ -557,7 +557,7 @@ def heuristic_delta_weight(input_path, output_path=None, converge_count=2, toler
     _historical_delta_weight_idx_map.clear()
     _last_x = None
     _last_CT = None
-    _pool = Pool(5)
+    _pool = Pool(2)
     if output_path is not None:
         _output_path = output_path
     if not exists(_output_path):
@@ -575,22 +575,25 @@ def heuristic_delta_weight(input_path, output_path=None, converge_count=2, toler
 
     optimal = 1e10
     current_converge_count = 0
-    while current_converge_count < converge_count:
-        delta_weight = _objective_function_for_delta_weight(D, delta_weight, d1, d2)
-        if _tardiness_obj_trace[-1] < optimal:
-            if abs(_tardiness_obj_trace[-1] - optimal) <= tolerance:
-                current_converge_count += 1
+    with open('trace.log', 'a') as f:
+        while current_converge_count < converge_count:
+            delta_weight = _objective_function_for_delta_weight(D, delta_weight, d1, d2)
+            if _tardiness_obj_trace[-1] < optimal:
+                if abs(_tardiness_obj_trace[-1] - optimal) <= tolerance:
+                    current_converge_count += 1
+                else:
+                    current_converge_count = 0
+                optimal = min(optimal, _tardiness_obj_trace[-1])
             else:
-                current_converge_count = 0
-            optimal = min(optimal, _tardiness_obj_trace[-1])
-        else:
-            current_converge_count += 1
+                current_converge_count += 1
 
-        print("trace:", _tardiness_obj_trace)
-        # break
-        # print("current_converge_count:", current_converge_count)
-        # print("delta size:", len(delta_weight))
-        # print(delta_weight)
+            print("trace:", _tardiness_obj_trace)
+            f.write('%r\n' % _tardiness_obj_trace)
+            f.write("time cost:%r" % (time.clock() - start))
+            # break
+            # print("current_converge_count:", current_converge_count)
+            # print("delta size:", len(delta_weight))
+            # print(delta_weight)
 
     return min(_tardiness_obj_trace), time.clock() - start
 
@@ -601,18 +604,39 @@ if __name__ == '__main__':
     # ./Inputs/case1
 
     ### run single
-    # data_path = './Inputs/P=15'
-    # (objVal, cost) = heuristic_delta_weight(data_path, converge_count=2, tolerance=1, d1=100, d2=0)
-    # print(objVal, cost)
+    data_path = './Inputs/P=5'
+    (objVal, cost) = heuristic_delta_weight(data_path, converge_count=2, tolerance=0.5, d1=100, d2=0.1)
+    print(objVal, cost)
 
-    ### run in batch
-    import pandas as pd
+    ### run in batch for project
+    # import pandas as pd
+    # d = pd.DataFrame(columns=["Project Size", "Objective Value", "Time Cost"])
+    # d_idx = 0
+    # for i in range(3, 10, 2):  # for project num 3,5,7,9,    range(from,to,step)
+    #     data_path = './Inputs/P=%d' % i
+    #     (objVal, cost) = heuristic_delta_weight(data_path, converge_count=2, tolerance=2, d1=100, d2=0.1)
+    #     d.loc[d_idx] = [i, objVal, cost]
+    #     d_idx += 1
+    # d.to_csv('heuristic_MIP_model_project.csv', index=False)
 
-    d = pd.DataFrame(columns=["Project Size", "Objective Value", "Time Cost"])
-    d_idx = 0
-    for i in range(10, 50, 5):
-        data_path = './Inputs/P=%d' % i
-        (objVal, cost) = heuristic_delta_weight(data_path, converge_count=2, tolerance=2, d1=100, d2=0)
-        d.loc[d_idx] = [i, objVal, cost]
-        d_idx += 1
-    d.to_csv('heuristic_MIP_model.csv', index=False)
+    ### run in batch for activity
+    # import pandas as pd
+    # d = pd.DataFrame(columns=["Activity Number", "Objective Value", "Time Cost"])
+    # d_idx = 0
+    # for i in range(5, 10, 1): # for activity number 5,6,7,8,9   range(from,to,step)
+    #     data_path = './Inputs/A=%d' % i
+    #     (objVal, cost) = heuristic_delta_weight(data_path, converge_count=2, tolerance=2, d1=100, d2=0.1)
+    #     d.loc[d_idx] = [i, objVal, cost]
+    #     d_idx += 1
+    # d.to_csv('heuristic_MIP_model_activity.csv', index=False)
+
+    ### run in batch for nk resource
+    # import pandas as pd
+    # d = pd.DataFrame(columns=["NK-Resource Number", "Objective Value", "Time Cost"])
+    # d_idx = 0
+    # for i in range(5, 16, 5):  # for nk-resource 5,10,15    range(from,to,step)
+    #     data_path = './Inputs/NKR=%d' % i
+    #     (objVal, cost) = heuristic_delta_weight(data_path, converge_count=2, tolerance=2, d1=100, d2=0.1)
+    #     d.loc[d_idx] = [i, objVal, cost]
+    #     d_idx += 1
+    # d.to_csv('heuristic_MIP_model_nk_resource.csv', index=False)

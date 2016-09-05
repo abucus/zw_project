@@ -1,4 +1,4 @@
-#from __future__ import print_function
+# from __future__ import print_function
 
 import time
 from os import makedirs
@@ -22,10 +22,10 @@ def original_model(input_path, output_path):
 
     start_time = time.clock()
     m = Model('construction')
-    #m.setParam('OutputFlag', False)
+    # m.setParam('OutputFlag', False)
     ##############################################################
     m.params.presolve = 0
-    #m.params.IntFeasTol = 1e-9
+    # m.params.IntFeasTol = 1e-9
     # Create variables############################################
     #####supplier-project shipping decision x and shipping quality
     x = {}
@@ -147,10 +147,6 @@ def original_model(input_path, output_path):
     #####constrain 13
     for j in range(project_n):
         m.addConstr(DT[j], GRB.GREATER_EQUAL, CT[j] + review_duration[j], name="constraint_13_project_%d" % j)
-    print(review_duration[15])
-    import sys
-    sys.exit(0)
-    print('add constr 13')
     #####constrain 14
     for i in range(-1, project_n):
         for j in range(project_n):
@@ -186,7 +182,8 @@ def original_model(input_path, output_path):
     m.setObjective(expr, GRB.MINIMIZE)
     m.update()
     ##########################################
-    m.params.presolve = 1
+    m.params.MIPGap = 1e-8
+    # m.params.presolve = 0
     m.update()
     # Solve
     # m.params.presolve=0
@@ -210,20 +207,44 @@ if __name__ == "__main__":
     # 'C:/Users/mteng/Desktop/small case'
     # data_path = './Inputs/case1/';
 
-    ### run single
-    data_path = './Inputs/P=15'
+    ## run single
+    data_path = './Inputs/P=5/'
     (objVal, cost) = original_model(data_path, './output')
 
-
-    ### run in batch
+    ### run in batch for project
     # import pandas as pd
-    #
     # d = pd.DataFrame(columns=["Project Size", "Objective Value", "Time Cost"])
     # d_idx = 0
-    # for i in range(10, 50, 5):
+    # for i in range(3, 10, 2):  # for project num 3,5,7,9,    range(from,to,step)
     #     data_path = './Inputs/P=%d' % i
     #     (objVal, cost) = original_model(data_path, './output')
     #     d.loc[d_idx] = [i, objVal, cost]
     #     d_idx += 1
     #     # print('ObjVal', objVal, 'cost', cost)
-    # d.to_csv('original_MIP_model.csv', index=False)
+    # d.to_csv('original_MIP_model_project.csv', index=False)
+
+
+    ### run in batch for activity
+    # import pandas as pd
+    # d = pd.DataFrame(columns=["Activity Number", "Objective Value", "Time Cost"])
+    # d_idx = 0
+    # for i in range(5, 10, 1): # for activity number 5,6,7,8,9    range(from,to,step)
+    #     data_path = './Inputs/A=%d' % i
+    #     (objVal, cost) = original_model(data_path, './output')
+    #     d.loc[d_idx] = [i, objVal, cost]
+    #     d_idx += 1
+    #     # print('ObjVal', objVal, 'cost', cost)
+    # d.to_csv('original_MIP_model_activity.csv', index=False)
+
+
+    ### run in batch for non-renewable-resource
+    # import pandas as pd
+    # d = pd.DataFrame(columns=["NK-Resource Number", "Objective Value", "Time Cost"])
+    # d_idx = 0
+    # for i in range(5, 16, 5): # for nk-resource 5,10,15    range(from,to,step)
+    #     data_path = './Inputs/NKR=%d' % i
+    #     (objVal, cost) = original_model(data_path, './output')
+    #     d.loc[d_idx] = [i, objVal, cost]
+    #     d_idx += 1
+    #     # print('ObjVal', objVal, 'cost', cost)
+    # d.to_csv('original_MIP_model_nk_resource.csv', index=False)

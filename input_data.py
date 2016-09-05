@@ -1,4 +1,4 @@
-def load_data(path='C:/Users/mteng/Desktop/small case/', budget_per_project=5e7):
+def load_data(path='C:/Users/mteng/Desktop/small case/', budget_per_project=5e5):
     # path='C:\Users\liujm\Desktop\zhengwei proposal\\final_project\Inputs'
 
     from collections import namedtuple
@@ -105,7 +105,7 @@ def load_data(path='C:/Users/mteng/Desktop/small case/', budget_per_project=5e7)
     # # Constant
     B = budget_per_project * project_n
     # B = 800000000
-    M = 1e8
+    M = 1e4
 
     return Data(supplier_project_shipping, project_list, project_activity, DD, resource_supplier_capacity, \
                 project_n, resource_project_demand, resource_supplier_list, M, c, B, resource_supplier_release_time, \
