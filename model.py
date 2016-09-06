@@ -24,7 +24,9 @@ def original_model(input_path, output_path):
     m = Model('construction')
     # m.setParam('OutputFlag', False)
     ##############################################################
-    m.params.presolve = 0
+    # m.params.presolve = 0
+    m.params.MIPGap = 1e-8
+    m.params.timelimit = 3600
     # m.params.IntFeasTol = 1e-9
     # Create variables############################################
     #####supplier-project shipping decision x and shipping quality
@@ -181,12 +183,7 @@ def original_model(input_path, output_path):
     print('add obj')
     m.setObjective(expr, GRB.MINIMIZE)
     m.update()
-    ##########################################
-    m.params.MIPGap = 1e-8
-    # m.params.presolve = 0
-    m.update()
     # Solve
-    # m.params.presolve=0
     m.optimize()
     print('project_n=%d' % project_n)
     # for j in range(project_n):
