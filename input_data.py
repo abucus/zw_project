@@ -1,4 +1,4 @@
-def load_data(path='C:/Users/mteng/Desktop/small case/', budget_per_project=5e5):
+def load_data(path='C:/Users/mteng/Desktop/small case/', budget_per_project=8e5):
     # path='C:\Users\liujm\Desktop\zhengwei proposal\\final_project\Inputs'
 
     from collections import namedtuple
