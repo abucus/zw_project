@@ -243,8 +243,8 @@ if __name__ == '__main__':
 
     # generate project data
     base_path = './P=%d/'
-    i = 3
-    while i < 10:
+    i = 10
+    while i < 13:
         path = base_path % i
         if not exists(path):
             os.makedirs(path)
@@ -255,36 +255,35 @@ if __name__ == '__main__':
         solvable = solvable_check()
         if solvable:
             i += 2
-    print(solvable_check())
 
     # generate activity data
-    base_path = './A=%d/'
-    i = 5
-    while i < 10:
-        path = base_path % i
-        if not exists(path):
-            os.makedirs(path)
-        generate_input(project_num_range=[5, 5],  #
-                       activity_num_range=[i, i],  #
-                       nk_resource_type_num_range=[5, 5],  #
-                       output_path=path)
-        solvable = solvable_check()
-        if solvable:
-            i += 1
-    print(solvable_check())
-
-    # generate nk resource data
-    base_path = './NKR=%d/'
-    i = 5
-    while i < 16:
-        path = base_path % i
-        if not exists(path):
-            os.makedirs(path)
-        generate_input(project_num_range=[5, 5],  #
-                       activity_num_range=[5, 5],  #
-                       nk_resource_type_num_range=[i, i],  #
-                       output_path=path)
-        solvable = solvable_check()
-        if solvable:
-            i += 5
-    print(solvable_check())
+    # base_path = './A=%d/'
+    # i = 5
+    # while i < 10:
+    #     path = base_path % i
+    #     if not exists(path):
+    #         os.makedirs(path)
+    #     generate_input(project_num_range=[5, 5],  #
+    #                    activity_num_range=[i, i],  #
+    #                    nk_resource_type_num_range=[5, 5],  #
+    #                    output_path=path)
+    #     solvable = solvable_check()
+    #     if solvable:
+    #         i += 1
+    # print(solvable_check())
+    #
+    # # generate nk resource data
+    # base_path = './NKR=%d/'
+    # i = 5
+    # while i < 16:
+    #     path = base_path % i
+    #     if not exists(path):
+    #         os.makedirs(path)
+    #     generate_input(project_num_range=[5, 5],  #
+    #                    activity_num_range=[5, 5],  #
+    #                    nk_resource_type_num_range=[i, i],  #
+    #                    output_path=path)
+    #     solvable = solvable_check()
+    #     if solvable:
+    #         i += 5
+    # print(solvable_check())

@@ -623,7 +623,7 @@ if __name__ == '__main__':
 
     d = pd.DataFrame(columns=["Project Size", "Objective Value", "Time Cost", "Gap"])
     d_idx = 0
-    for i in range(10, 19, 2):  # for project num 3,5,7,9,    range(from,to,step)
+    for i in range(10, 19, 2)[:1]:  # for project num 3,5,7,9,    range(from,to,step)
         data_path = './Inputs/P=%d' % i
         (objVal, cost, gap) = heuristic_delta_weight(data_path, converge_count=1, tolerance=2, d1=100, d2=0.1)
         d.loc[d_idx] = [i, objVal, cost, gap]
