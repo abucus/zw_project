@@ -1,4 +1,4 @@
-def load_data(path='C:/Users/mteng/Desktop/small case/', budget_per_project=8e5):
+def load_data(path='C:/Users/mteng/Desktop/small case/', budget_per_project=1e20):
     # path='C:\Users\liujm\Desktop\zhengwei proposal\\final_project\Inputs'
 
     from collections import namedtuple
@@ -81,7 +81,7 @@ def load_data(path='C:/Users/mteng/Desktop/small case/', budget_per_project=8e5)
         if len(row) > 4:
             for row1 in row[4].split(' '):
                 if len(row1) > 2:
-                    project_activity[row[0]].add_edge(row[1], row1[1:-1])
+                    project_activity[row[0]].add_edge(row[1], row1.replace('\'',''))
 
     project_activity_durations = csv.reader(open(path + '\\project_activity_duration.csv', 'r'))
     for row in project_activity_durations:
@@ -103,9 +103,10 @@ def load_data(path='C:/Users/mteng/Desktop/small case/', budget_per_project=8e5)
     # ##################################################
     #
     # # Constant
-    B = budget_per_project * project_n
+    #B = budget_per_project * project_n
+    B = 140933160.63
     # B = 800000000
-    M = 1e4
+    M = 1e6
 
     return Data(supplier_project_shipping, project_list, project_activity, DD, resource_supplier_capacity, \
                 project_n, resource_project_demand, resource_supplier_list, M, c, B, resource_supplier_release_time, \

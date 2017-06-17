@@ -230,7 +230,8 @@ def solvable_check(path='./case1/'):
 if __name__ == '__main__':
     import os
     from os.path import exists
-
+    from random import seed
+    seed(23)
     # path = './P=5/'
     # if not exists(path):
     #     os.makedirs(path)
@@ -242,19 +243,19 @@ if __name__ == '__main__':
     # print(solvable)
 
     # generate project data
-    base_path = './P=%d/'
-    i = 10
-    while i < 13:
+    base_path = './New_New_New_P=%d/'
+    i = 6
+    while i < 7:
         path = base_path % i
         if not exists(path):
             os.makedirs(path)
-        generate_input(project_num_range=[i, i],  #
+        generate_input(project_num_range=[5, 5],  #
                        activity_num_range=[5, 5],  #
                        nk_resource_type_num_range=[5, 5],  #
                        output_path=path)
         solvable = solvable_check()
         if solvable:
-            i += 2
+            i += 1
 
     # generate activity data
     # base_path = './A=%d/'
